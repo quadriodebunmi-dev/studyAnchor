@@ -84,7 +84,7 @@ export default function GoogleContinuePage() {
               value={form.department || ""}
               onChange={(v) => update("department", v)}
               schoolId={school?._id}
-              placeholder={structure?.orgUnitLabel ? `Search for your ${structure.orgUnitLabel} / Department` : "Search for your department"}
+              placeholder={"Search for your department"}
             />
             <div className="grid grid-cols-2 gap-3">
               <Select onChange={(e) => update("level", e.target.value)} defaultValue="">
