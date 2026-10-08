@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Brand palette
+   #ffffff paper · #676f9d haze · #424769 ink · #2d3250 night · #f9b17a highlight
+
+   Semantic colours are CSS variables so one Tailwind class (`text-primary`,
+   `bg-danger/10`, ...) stays legible in both light and dark mode. Values are
+   space-separated RGB channels so Tailwind's `/opacity` modifier keeps working.
+--------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --c-primary: 66 71 105;        /* #424769 */
+    --c-primary-dark: 45 50 80;    /* #2d3250 */
+    --c-primary-fg: 255 255 255;
+    --c-primary-soft: 238 240 248;
+
+    --c-secondary: 103 111 157;    /* #676f9d */
+    --c-success: 26 136 94;
+    --c-warning: 197 116 43;
+    --c-danger: 200 55 42;
+
+    --c-surface: 255 255 255;
+    --c-surface-raised: 255 255 255;
+    --c-hairline: 224 227 240;
+
+    --c-ground: 247 248 252;
+    --focus-ring: 249 177 122;     /* peach focus, always */
+    color-scheme: light;
+  }
+
+  .dark {
+    /* On navy backgrounds the ink primary disappears, so it lifts to a pale
+       periwinkle. The peach is NOT promoted here: it stays reserved for study
+       progress and the main call to action, or it would lose all its force. */
+    --c-primary: 163 171 214;      /* lifted #676f9d */
+    --c-primary-dark: 197 202 223;
+    --c-primary-fg: 45 50 80;      /* navy text on the pale primary */
+    --c-primary-soft: 54 59 92;
+
+    --c-secondary: 197 202 223;
+    --c-success: 74 201 148;
+    --c-warning: 249 177 122;
+    --c-danger: 255 138 122;
+
+    --c-surface: 45 50 80;         /* #2d3250 */
+    --c-surface-raised: 54 59 92;
+    --c-hairline: 66 71 105;       /* #424769 */
+
+    --c-ground: 35 39 63;
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 dark:bg-slate-950 text-night dark:text-slate-100 font-sans antialiased transition-colors;
+    /* Faint ruled-paper grid: this is a study app, so the ground reads as a
+       page rather than as a blank dashboard canvas. */
+    background-image: linear-gradient(rgb(var(--c-hairline) / 0.45) 1px, transparent 1px);
+    background-size: 100% 32px;
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+
+  /* One focus treatment everywhere, in the accent, so keyboard users always
+     know where they are. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--focus-ring));
+    outline-offset: 2px;
+    border-radius: 10px;
+  }
+
+  ::selection {
+    background: rgb(249 177 122 / 0.4);
+  }
+
+  /* Scrollbars in the navy family instead of the OS default grey. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-hairline)) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-hairline));
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--c-secondary));
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* A card is a sheet of paper on the ruled ground. */
+  .lv-card {
+    @apply rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-card;
+  }
+
+  .lv-card-interactive {
+    @apply lv-card transition-[transform,box-shadow,border-color] duration-200
+           hover:-translate-y-0.5 hover:shadow-lift hover:border-accent/60
+           active:translate-y-0 active:shadow-card;
+  }
+
+  /* Section heading with a short accent rule to its left — the structural
+     device that marks "a new part of your study page". */
+  .lv-section-title {
+    @apply font-display font-semibold text-night dark:text-slate-100 flex items-center gap-2.5;
+  }
+  .lv-section-title::before {
+    content: "";
+    @apply h-4 w-1 rounded-full bg-accent;
+  }
+
+  .lv-meta {
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  /* Loading placeholder that matches the paper metaphor. */
+  .lv-skeleton {
+    @apply relative overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800;
+  }
+  .lv-skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.18), transparent);
+  }
+
+  /* Safe-area padding for installed/standalone PWA windows. */
+  .lv-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .lv-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+@media (display-mode: standalone) {
+  /* Installed app: disable the pull-to-refresh rubber band so it feels native. */
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

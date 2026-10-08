@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Study Anchor — Your course materials, organized.</title>
+    <meta
+      name="description"
+      content="Find your course materials, save them for offline study, and practise with auto-generated quizzes."
+    />
+
+    <!-- Progressive Web App -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#2d3250" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="application-name" content="Study Anchor" />
+
+    <!-- iOS needs its own set of hints; it ignores most of the manifest. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Study Anchor" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- Windows tiles -->
+    <meta name="msapplication-TileColor" content="#2d3250" />
+    <meta name="msapplication-TileImage" content="/icons/icon-192.png" />
+
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Study Anchor" />
+    <meta property="og:description" content="Your course materials, organized." />
+    <meta property="og:image" content="/icons/og-cover.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* Painted before React boots so the first frame is never a white flash
+         for people in dark mode. */
+      html.dark { background: #23273f; }
+      html { background: #f7f8fc; }
+    </style>
+    <script>
+      // Apply the saved theme synchronously to avoid a flash of the wrong one.
+      try {
+        var saved = localStorage.getItem("study-anchor-theme");
+        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (saved === "dark" || (!saved && prefersDark)) document.documentElement.classList.add("dark");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <div style="padding:2rem;font-family:system-ui;color:#2d3250">
+        Study Anchor needs JavaScript enabled to load your course materials.
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
