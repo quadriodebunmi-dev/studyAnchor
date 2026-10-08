@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#2d3250" />
+    <title>Offline — Study Anchor</title>
+    <link rel="icon" href="/icons/icon-64.png" />
+    <style>
+      :root {
+        --night: #2d3250;
+        --ink: #424769;
+        --haze: #676f9d;
+        --peach: #f9b17a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--night);
+        background-image: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+        background-size: 100% 32px;
+        color: #fff;
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .sheet {
+        width: 100%;
+        max-width: 26rem;
+        background: var(--ink);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 18px;
+        padding: 32px 28px;
+        text-align: left;
+      }
+      .rule { width: 34px; height: 4px; border-radius: 999px; background: var(--peach); }
+      h1 { margin: 20px 0 10px; font-size: 1.5rem; line-height: 1.2; letter-spacing: -0.02em; }
+      p { margin: 0 0 8px; color: #c7ccea; line-height: 1.6; font-size: 0.95rem; }
+      ul { margin: 16px 0 0; padding-left: 18px; color: #c7ccea; font-size: 0.9rem; line-height: 1.8; }
+      button {
+        margin-top: 24px;
+        width: 100%;
+        padding: 13px 18px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--peach);
+        color: var(--night);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover { background: #ffc192; }
+      button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+      .status { margin-top: 14px; font-size: 0.8rem; color: var(--haze); }
+    </style>
+  </head>
+  <body>
+    <main class="sheet">
+      <div class="rule"></div>
+      <h1>You're offline</h1>
+      <p>Study Anchor can't reach the server right now, so new materials and quizzes aren't loading.</p>
+      <ul>
+        <li>Materials you already opened stay available</li>
+        <li>Anything you bookmarked is still saved</li>
+        <li>Uploads will need a connection</li>
+      </ul>
+      <button type="button" onclick="location.reload()">Try again</button>
+      <p class="status" id="status">Waiting for a connection…</p>
+    </main>
+    <script>
+      const status = document.getElementById("status");
+      addEventListener("online", () => {
+        status.textContent = "Back online — reloading…";
+        location.reload();
+      });
+      if (navigator.onLine) status.textContent = "Connection found. Tap Try again.";
+    </script>
+  </body>
+</html>
