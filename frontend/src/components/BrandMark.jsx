@@ -8,7 +8,7 @@ import React from "react";
 export default function BrandMark({ className = "h-9 w-9", rounded = true }) {
   return (
     <>
-    <img className= "h-9 w-9" src="https://lenspdf.netlify.app/icons/icon-16.png" alt="logo" />
+    <img className= "h-9 w-9" src="https://study-anchor.com/icons/icon-64.png" alt="logo" />
     </>
   );
 }
