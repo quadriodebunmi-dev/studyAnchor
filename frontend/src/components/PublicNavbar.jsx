@@ -47,7 +47,7 @@ export default function PublicNavbar() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
         <Link to="/" onClick={close} className={`flex items-center gap-2 rounded-lg font-display text-lg font-bold ${focusRing}`}>
           <span className="grid h-8 w-8 place-items-center rounded-lg text-night">
-            <img src="https://lenspdf.netlify.app/icons/icon-16.png" alt="logo" />
+            <img src="https://study-anchor.com/icons/icon-64.png" alt="logo" />
           </span>
           {APP_CONFIG.name}
         </Link>
