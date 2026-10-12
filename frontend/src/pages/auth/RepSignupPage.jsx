@@ -69,7 +69,7 @@ export default function RepSignupPage() {
               value={form.department || ""}
               onChange={(v) => update("department", v)}
               schoolId={school?._id}
-              placeholder={structure?.orgUnitLabel ? `Search for your ${structure.orgUnitLabel} / Department` : "Search for your department"}
+              placeholder={"Search for your department"}
             />
            <Select value={form.level} onChange={(e) => update("level", e.target.value)} aria-label="Level">
                        <option value="" disabled>Level</option>
