@@ -10,6 +10,8 @@ import { uploadMaterial } from "../../services/materialService.js";
 import { useToast } from "../../components/Toast.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
+import { DEPARTMENTS, LEVELS, SEMESTERS, SESSIONS } from "../../config/appConfig.js";
+const emptyForm = { code: "", title: "", department: DEPARTMENTS[0], level: LEVELS[0], semester: SEMESTERS[0], session: SESSIONS[0], description: "" };
 const MAX_FILES = 10;
 
 export default function RepUploadPage() {
@@ -23,7 +25,21 @@ export default function RepUploadPage() {
   const navigate = useNavigate();
   const showToast = useToast();
 
-  useEffect(() => { listCourses({ limit: 100 }).then((res) => { setCourses(res.courses); setForm((f) => ({ ...f, courseId: res.courses[0]?._id || "" })); }); }, []);
+  // New courses default to the rep's own department, level, semester and
+// session — that's what they're adding courses for most of the time —
+// falling back to the app-wide defaults for anything the rep's profile
+// doesn't have set.
+function defaultCourseForm(user) {
+  return {
+    ...emptyForm,
+    department: user?.department || emptyForm.department,
+    level: user?.level || emptyForm.level,
+    semester: user?.semester || emptyForm.semester,
+    session: user?.session || emptyForm.session,
+  };
+}
+
+  useEffect(() => { listCourses({ limit: 100, filters: defaultCourseForm(user) }).then((res) => { setCourses(res.courses); setForm((f) => ({ ...f, courseId: res.courses[0]?._id || "" })); }); }, []);
 
   function addFiles(fileList) {
     const incoming = Array.from(fileList);

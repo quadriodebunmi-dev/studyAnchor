@@ -1,7 +1,10 @@
 import api from "./api.js";
 
 export async function listCourses({ page, limit, ...filters } = {}) {
-  const res = await api.get("/courses", { params: { ...filters, page, limit } });
+  //console.log({...filters})
+  const filter = {...filters};
+  console.log(filter)
+  const res = await api.get(`/courses?department=${filter.filters.department}&level=${filter.filters.level}&semester=${filter.filters.semester}&session=${filter.filters.session}`, { params: { ...filters, page, limit } });
   return res.data; // { courses, pagination }
 }
 

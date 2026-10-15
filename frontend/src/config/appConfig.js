@@ -29,7 +29,7 @@ export function getAcademicSessions(count = 6) {
   const startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
   const sessions = [];
   for (let i = 0; i < count; i++) {
-    const y = startYear + 1 - i; // include the upcoming session first
+    const y = startYear  - i; // include the upcoming session first
     sessions.push(`${y}/${y + 1}`);
   }
   return sessions;

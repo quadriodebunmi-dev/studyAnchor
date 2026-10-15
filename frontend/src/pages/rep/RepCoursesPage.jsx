@@ -93,9 +93,9 @@ export default function RepCoursesPage() {
   // Both Course Reps and Class Reps can fully manage courses (add/edit/delete).
   const canManageCourses = user?.role === "rep" && user?.repStatus === "active";
   
-
+//console.log({filters: defaultCourseForm(user) })
   function refresh(p = page) {
-    listCourses({ page: p, limit: 20 }).then((res) => { setCourses(res.courses); setPagination(res.pagination); });
+    listCourses({ page: p, limit: 20, filters: defaultCourseForm(user) }).then((res) => { setCourses(res.courses); setPagination(res.pagination); });
   }
   useEffect(() => { setCourses(null); refresh(page); }, [page]);
 
