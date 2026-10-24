@@ -10,7 +10,9 @@
     "seed": "node utils/seed.js",
     "migrate:school": "node utils/migrateSchool.js",
     "fix-access": "node utils/fixCloudinaryAccess.js",
-    "backfill:feed": "node utils/backfillFeedData.js"
+    "backfill:feed": "node utils/backfillFeedData.js",
+    "test": "node --test \"tests/*.test.js\"",
+    "sync-indexes": "node utils/syncIndexes.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",
@@ -32,9 +34,13 @@
     "xlsx": "^0.18.5",
     "jszip": "^3.10.1",
     "xml2js": "^0.6.2",
-    "cookie-parser": "^1.4.6"
+    "cookie-parser": "^1.4.6",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
+  },
+  "optionalDependencies": {
+    "web-push": "^3.6.7"
   }
 }

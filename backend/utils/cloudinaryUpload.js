@@ -60,3 +60,66 @@ export function uploadBufferToCloudinary(buffer, filename, fileType) {
     stream.end(buffer);
   });
 }
+
+// ---- Room chat media --------------------------------------------------------
+// Photos use Cloudinary's "image" pipeline; sounds go through "video" (Cloudinary's
+// type for all audio/video). Both are delivered publicly.
+export function uploadChatMedia(buffer, { roomId, kind }) {
+  const resourceType = kind === "audio" ? "video" : "image";
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: `${ENV.appName.toLowerCase()}/rooms/${roomId}`,
+        resource_type: resourceType,
+        public_id: `${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+        overwrite: false,
+        access_mode: "public",
+      },
+      (error, result) => (error ? reject(error) : resolve({ ...result, resourceType }))
+    );
+    stream.end(buffer);
+  });
+}
+
+// Best effort: a failed cleanup must never block deleting the message itself.
+export async function deleteChatMedia(publicId, kind) {
+  if (!publicId) return;
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: kind === "audio" ? "video" : "image", invalidate: true });
+  } catch (err) {
+    console.error("Chat media cleanup failed:", err.message);
+  }
+}
+
+// ---- Profile pictures -------------------------------------------------------
+// One image per user (same public_id, overwritten on change). Cloudinary also
+// re-crops it to a 256px square around the face, so even a hand-made request
+// can't leave a huge image behind.
+export function uploadAvatar(buffer, userId) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: `${ENV.appName.toLowerCase()}/avatars`,
+        public_id: `user-${userId}`,
+        resource_type: "image",
+        overwrite: true,
+        invalidate: true,
+        format: "jpg",
+        transformation: [{ width: 256, height: 256, crop: "fill", gravity: "face" }],
+        access_mode: "public",
+      },
+      (error, result) => (error ? reject(error) : resolve(result))
+    );
+    stream.end(buffer);
+  });
+}
+
+// Best effort: a failed cleanup must never block removing the picture from the profile.
+export async function deleteAvatar(publicId) {
+  if (!publicId) return;
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
+  } catch (err) {
+    console.error("Avatar cleanup failed:", err.message);
+  }
+}

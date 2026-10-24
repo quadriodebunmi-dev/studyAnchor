@@ -1,4 +1,5 @@
 import Course from "../models/Course.js";
+import { isIndependent } from "./learner.js";
 
 // "Which courses does this person study?" — used by the dashboard feed and by
 // the zip "Download all" so both agree.
@@ -19,6 +20,9 @@ export function repCourseCodes(user) {
 }
 
 export function contextCourseFilter(user) {
+  // Independent learners aren't in any school, so they have no courses. Without
+  // this an empty filter would match EVERY school's courses.
+  if (isIndependent(user)) return { _id: { $in: [] } };
   const school = user?.schoolId ? { schoolId: user.schoolId } : {};
   const filter = { ...school };
   if (user?.department) filter.department = user.department;
