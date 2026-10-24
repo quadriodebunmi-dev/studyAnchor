@@ -177,7 +177,7 @@ export default function StudentDashboard() {
                 {user.level && <span className={heroPill}>{user.level} Level</span>}
                 {user.semester && <span className={heroPill}>{user.semester}</span>}
                 {user.session && <span className={heroPill}>{user.session}</span>}
-                <PlanBadge variant="hero" />
+                
               </div>
             </div>
             <img src={booksIllustration} alt="" aria-hidden="true" className="h-14 w-14 shrink-0 rounded-xl bg-white/90 object-contain p-1 sm:h-16 sm:w-16" />
