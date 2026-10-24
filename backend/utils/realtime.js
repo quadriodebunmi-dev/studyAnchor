@@ -19,6 +19,17 @@ let io = null;
 
 export const isRealtimeActive = () => io !== null;
 
+// Who is online in a room = distinct users with at least one live socket in `room:<id>`.
+async function onlineUserIds(roomId) {
+  if (!io) return [];
+  const sockets = await io.in(`room:${roomId}`).fetchSockets();
+  return [...new Set(sockets.map((s) => s.data.userId).filter(Boolean))];
+}
+
+async function broadcastPresence(roomId) {
+  try { io?.to(`room:${roomId}`).emit("presence:update", { roomId, online: await onlineUserIds(roomId) }); } catch { /* best effort */ }
+}
+
 export async function initRealtime(httpServer) {
   if (!ENV.realtimeEnabled) {
     console.log("ℹ️  Realtime disabled (serverless host or REALTIME_ENABLED=false) — clients will poll.");
@@ -46,6 +57,7 @@ export async function initRealtime(httpServer) {
       const user = await User.findById(decoded.id).select("name suspended");
       if (!user || user.suspended) return next(new Error("unauthorised"));
       socket.data.userId = String(user._id);
+      socket.data.name = user.name || "Someone";
       next();
     } catch {
       next(new Error("unauthenticated"));
@@ -62,7 +74,8 @@ export async function initRealtime(httpServer) {
         const member = await RoomMember.findOne({ room: roomId, user: socket.data.userId, status: "active" }).select("_id");
         if (!member) return ack?.({ ok: false, message: "Not a member of this room." });
         socket.join(`room:${roomId}`);
-        ack?.({ ok: true });
+        ack?.({ ok: true, online: await onlineUserIds(roomId) });
+        broadcastPresence(roomId);
       } catch {
         ack?.({ ok: false });
       }
@@ -70,7 +83,33 @@ export async function initRealtime(httpServer) {
 
     socket.on("room:leave", (payload) => {
       const roomId = String(payload?.roomId || "");
-      if (roomId) socket.leave(`room:${roomId}`);
+      if (!roomId) return;
+      socket.leave(`room:${roomId}`);
+      socket.to(`room:${roomId}`).emit("typing", { roomId, userId: socket.data.userId, name: socket.data.name, typing: false });
+      broadcastPresence(roomId);
+    });
+
+    // Current online list for a room this socket has joined.
+    socket.on("presence:get", async (payload, ack) => {
+      const roomId = String(payload?.roomId || "");
+      if (!socket.rooms.has(`room:${roomId}`)) return ack?.({ ok: false, online: [] });
+      ack?.({ ok: true, online: await onlineUserIds(roomId) });
+    });
+
+    // Typing indicator: only relayed for rooms this socket has been verified into.
+    socket.on("typing", (payload) => {
+      const roomId = String(payload?.roomId || "");
+      if (!socket.rooms.has(`room:${roomId}`)) return;
+      socket.to(`room:${roomId}`).emit("typing", { roomId, userId: socket.data.userId, name: socket.data.name, typing: Boolean(payload?.typing) });
+    });
+
+    socket.on("disconnecting", () => {
+      const roomIds = [...socket.rooms].filter((r) => r.startsWith("room:")).map((r) => r.slice(5));
+      for (const roomId of roomIds) {
+        socket.to(`room:${roomId}`).emit("typing", { roomId, userId: socket.data.userId, name: socket.data.name, typing: false });
+      }
+      // The socket is still in its rooms until this tick ends; recompute right after.
+      setTimeout(() => roomIds.forEach(broadcastPresence), 50);
     });
   });
 
@@ -88,5 +127,8 @@ export function emitToUser(userId, event, payload = {}) {
 
 /** Drop a user's live sockets out of a room (removed, banned, left). */
 export function evictFromRoom(roomId, userId) {
-  try { io?.in(`user:${userId}`).socketsLeave(`room:${roomId}`); } catch { /* see above */ }
+  try {
+    io?.in(`user:${userId}`).socketsLeave(`room:${roomId}`);
+    broadcastPresence(roomId);
+  } catch { /* see above */ }
 }

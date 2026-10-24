@@ -462,12 +462,12 @@ export async function listMembers(req, res, next) {
     const { page, limit, skip } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 100 });
     const filter = { room: req.room._id, status: "active" };
     const [rows, total] = await Promise.all([
-      RoomMember.find(filter).sort({ role: 1, joinedAt: 1, _id: 1 }).skip(skip).limit(limit).populate("user", "name"),
+      RoomMember.find(filter).sort({ role: 1, joinedAt: 1, _id: 1 }).skip(skip).limit(limit).populate("user", "name avatarUrl"),
       RoomMember.countDocuments(filter),
     ]);
     const rank = { owner: 0, moderator: 1, member: 2 };
     const members = rows.filter((r) => r.user)
-      .map((r) => ({ user: { _id: r.user._id, name: r.user.name }, role: r.role, joinedAt: r.joinedAt }))
+      .map((r) => ({ user: { _id: r.user._id, name: r.user.name, avatarUrl: r.user.avatarUrl || "" }, role: r.role, joinedAt: r.joinedAt }))
       .sort((a, b) => rank[a.role] - rank[b.role]);
     res.json({ members, pagination: pageMeta({ page, limit, total }) });
   } catch (err) { next(err); }

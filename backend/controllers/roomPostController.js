@@ -21,7 +21,7 @@ function postView(p, viewerId, membership) {
     _id: p._id,
     room: p.room,
     parent: p.parent || null,
-    author: p.author?.name ? { _id: p.author._id, name: p.author.name } : { _id: idStr(p.author), name: "Member" },
+    author: p.author?.name ? { _id: p.author._id, name: p.author.name, avatarUrl: p.author.avatarUrl || "" } : { _id: idStr(p.author), name: "Member", avatarUrl: "" },
     content: removed ? "" : p.content,
     attachment: !removed && p.attachment?.url
       ? {
@@ -45,7 +45,7 @@ export async function listPosts(req, res, next) {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const filter = { room: req.room._id, parent: null };
     if (mongoose.isValidObjectId(req.query.before)) filter._id = { $lt: req.query.before };
-    const rows = await RoomPost.find(filter).sort({ _id: -1 }).limit(limit + 1).populate("author", "name");
+    const rows = await RoomPost.find(filter).sort({ _id: -1 }).limit(limit + 1).populate("author", "name avatarUrl");
     const hasMore = rows.length > limit;
     const page = rows.slice(0, limit);
     res.json({
@@ -63,7 +63,7 @@ export async function listReplies(req, res, next) {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
     const filter = { room: req.room._id, parent: req.params.postId };
     if (mongoose.isValidObjectId(req.query.after)) filter._id = { $gt: req.query.after };
-    const rows = await RoomPost.find(filter).sort({ _id: 1 }).limit(limit + 1).populate("author", "name");
+    const rows = await RoomPost.find(filter).sort({ _id: 1 }).limit(limit + 1).populate("author", "name avatarUrl");
     const hasMore = rows.length > limit;
     res.json({ replies: rows.slice(0, limit).map((p) => postView(p, req.user._id, req.membership)), hasMore });
   } catch (err) { next(err); }
@@ -122,7 +122,7 @@ export async function createPost(req, res, next) {
     await Promise.all(ops);
 
     // Don't assign onto the document (the path is an ObjectId and would be re-cast, losing the name).
-    const view = postView({ ...post.toObject(), author: { _id: req.user._id, name: req.user.name } }, req.user._id, req.membership);
+    const view = postView({ ...post.toObject(), author: { _id: req.user._id, name: req.user.name, avatarUrl: req.user.avatarUrl || "" } }, req.user._id, req.membership);
     // Other members get the same shape minus the "mine" flag, which each client recomputes.
     emitToRoom(idStr(req.room._id), "post:new", { post: { ...view, mine: false } });
 
@@ -147,7 +147,7 @@ export async function editPost(req, res, next) {
   try {
     const content = sanitize(req.body?.content);
     if (content.length > PLATFORM.rooms.postMaxChars) return res.status(400).json({ message: "Enter a message up to " + PLATFORM.rooms.postMaxChars + " characters." });
-    const post = await RoomPost.findOne({ _id: req.params.postId, room: req.room._id }).populate("author", "name");
+    const post = await RoomPost.findOne({ _id: req.params.postId, room: req.room._id }).populate("author", "name avatarUrl");
     if (!post || post.removedAt) return res.status(404).json({ message: "Message not found." });
     if (!content && !post.attachment?.url) return res.status(400).json({ message: "Enter a message up to " + PLATFORM.rooms.postMaxChars + " characters." });
     if (idStr(post.author) !== idStr(req.user._id)) return res.status(403).json({ message: "You can only edit your own messages." });
