@@ -12,9 +12,11 @@
  *   GET API reads → network-first with a short-lived cache, so a student who
  *                  loses signal still sees the last version of their feed.
  *   anything non-GET → straight to the network, never cached.
+ *   auth, upload, billing, push, admin → never cached.
+ *   push events → shown as system notifications (bottom of file).
  */
 
-const VERSION = "lv-v2";
+const VERSION = "lv-v3";
 const SHELL_CACHE = `${VERSION}-shell`;
 const ASSET_CACHE = `${VERSION}-assets`;
 const API_CACHE = `${VERSION}-api`;
@@ -164,8 +166,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Never cache auth or upload traffic.
-  if (/\/(auth|login|logout|upload)\b/.test(url.pathname)) return;
+  // Never cache auth, upload, payment, push or admin traffic (payment status must always be live).
+  if (/\/(auth|login|logout|upload|billing|push|admin)\b/.test(url.pathname)) return;
 
   if (sameOrigin && url.pathname.startsWith("/assets/")) {
     event.respondWith(cacheFirst(request, ASSET_CACHE));
@@ -187,4 +189,30 @@ self.addEventListener("fetch", (event) => {
   if (/\/api\//.test(url.pathname)) {
     event.respondWith(networkFirstApi(request));
   }
+});
+
+// ---- Web Push ---------------------------------------------------------------
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* plain text payload */ }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Study Anchor", {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      data: { link: data.link || "/" },
+      tag: data.type || undefined, // collapses repeats of the same kind
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.link || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      const open = wins.find((w) => "focus" in w);
+      if (open) { open.navigate(url); return open.focus(); }
+      return self.clients.openWindow(url);
+    })
+  );
 });
