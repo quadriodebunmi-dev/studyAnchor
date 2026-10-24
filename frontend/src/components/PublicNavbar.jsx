@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Anchor, Menu, X } from "lucide-react";
 import { APP_CONFIG } from "../config/appConfig.js";
+import InstallButton from "./InstallButton.jsx";
 
 // `href` = in-page anchor on the landing page, `to` = router route.
 const LINKS = [
@@ -59,12 +60,14 @@ export default function PublicNavbar() {
           ))}
         </nav>
         <div className="hidden items-center gap-2 md:flex">
+          <InstallButton variant="nav" />
           <Link to="/login" className={`rounded-full px-4 py-2 text-sm font-medium text-slate-200 hover:bg-white/10 ${focusRing}`}>Log in</Link>
           <Link to="/signup" className={`rounded-full bg-accent px-4 py-2 text-sm font-semibold text-night hover:brightness-110 ${focusRing}`}>Sign up</Link>
         </div>
 
         {/* Mobile: keep the main CTA visible next to the menu button */}
         <div className="flex items-center gap-2 md:hidden">
+          <InstallButton variant="nav" label="Install" iconOnlyOnMobile className="!px-3" />
           <Link to="/signup" className={`rounded-full bg-accent px-4 py-2 text-sm font-semibold text-night ${focusRing}`}>Sign up</Link>
           <button
             type="button"
@@ -89,6 +92,7 @@ export default function PublicNavbar() {
             ))}
           </ul>
           <div className="mx-auto grid max-w-6xl gap-2 px-4 pb-5 pt-2">
+            <InstallButton variant="nav" className="w-full !py-3" />
             <Link to="/signup" onClick={close} className={`rounded-full bg-accent px-4 py-3 text-center font-semibold text-night ${focusRing}`}>Sign up as a student</Link>
             <Link to="/login" onClick={close} className={`rounded-full border border-white/25 px-4 py-3 text-center font-medium ${focusRing}`}>Log in</Link>
           </div>

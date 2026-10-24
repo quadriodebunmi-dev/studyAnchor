@@ -38,22 +38,30 @@ export function InlineLoader({ label = "Loading..." }) {
   );
 }
 
-/** Paper-shaped placeholders, used while a grid of cards is loading. */
+/** Placeholders shaped like the compact material/course cards. */
 export function CardSkeleton({ count = 4 }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="lv-card p-4">
+        <div key={i} className="lv-card p-3" aria-hidden="true">
           <div className="flex gap-3">
-            <div className="lv-skeleton h-11 w-11 shrink-0" />
-            <div className="w-full space-y-2">
-              <div className="lv-skeleton h-3.5 w-3/5" />
-              <div className="lv-skeleton h-3 w-4/5" />
-              <div className="lv-skeleton h-3 w-2/5" />
+            <div className="lv-skeleton h-10 w-10 shrink-0" />
+            <div className="w-full space-y-2 pt-0.5">
+              <div className="lv-skeleton h-3 w-3/5" />
+              <div className="lv-skeleton h-2.5 w-2/5" />
             </div>
           </div>
         </div>
       ))}
     </>
+  );
+}
+
+/** Row of compact skeleton tiles, for dashboards while data loads. */
+export function ListSkeleton({ rows = 3 }) {
+  return (
+    <div className="space-y-2" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => <div key={i} className="lv-skeleton h-14 w-full" />)}
+    </div>
   );
 }

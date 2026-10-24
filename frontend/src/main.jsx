@@ -5,6 +5,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
+import "./pwa/install.js"; // captures the browser install prompt before React mounts
 import { registerSW } from "./pwa/registerSW.js";
 import "./index.css";
 

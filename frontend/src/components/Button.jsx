@@ -3,8 +3,8 @@ import React from "react";
 // `primary` resolves through the --c-primary variables: deep navy on light
 // backgrounds, peach on dark ones, so it stays readable in both themes.
 const VARIANTS = {
-  primary: "bg-primary text-primary-fg hover:bg-primary-dark shadow-card",
-  accent: "bg-accent text-accent-fg hover:bg-highlight-deep shadow-glow",
+  primary: "bg-primary text-primary-fg hover:bg-primary-dark",
+  accent: "bg-accent text-accent-fg hover:bg-highlight-deep",
   secondary: "bg-secondary-purple text-white hover:opacity-90 dark:text-night",
   ghost: "text-night dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800",
   destructive: "bg-danger text-white dark:text-night hover:opacity-90",
@@ -13,9 +13,9 @@ const VARIANTS = {
 };
 
 const SIZES = {
-  sm: "px-3 py-1.5 text-xs gap-1.5",
-  md: "px-4 py-2.5 text-sm gap-2",
-  lg: "px-5 py-3 text-base gap-2",
+  sm: "min-h-8 px-3 py-1.5 text-xs gap-1.5",
+  md: "min-h-10 px-4 py-2 text-sm gap-2",
+  lg: "min-h-11 px-5 py-2.5 text-[15px] gap-2",
 };
 
 export default function Button({

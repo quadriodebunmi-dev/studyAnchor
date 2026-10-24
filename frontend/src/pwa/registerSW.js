@@ -31,7 +31,8 @@ function trackInstalling(registration) {
 export function registerSW() {
   if (!("serviceWorker" in navigator)) return;
   // The SW is served from /public, so it only exists in a real build/preview.
-  if (import.meta.env.DEV) return;
+  // Set VITE_ENABLE_SW=true in frontend/.env to test push in `npm run dev`.
+  if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_SW !== "true") return;
 
   window.addEventListener("load", async () => {
     try {
@@ -54,8 +55,12 @@ export function registerSW() {
     }
   });
 
+  // On the very first install the new worker claims the page; reloading then would
+  // interrupt whatever the person is doing (e.g. a permission prompt), so only reload on updates.
+  let hadController = Boolean(navigator.serviceWorker.controller);
   let refreshing = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) { hadController = true; return; }
     if (refreshing) return;
     refreshing = true;
     window.location.reload();

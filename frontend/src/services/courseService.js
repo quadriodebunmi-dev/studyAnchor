@@ -1,10 +1,16 @@
 import api from "./api.js";
 
-export async function listCourses({ page, limit, ...filters } = {}) {
-  //console.log({...filters})
-  const filter = {...filters};
-  console.log(filter)
-  const res = await api.get(`/courses?department=${filter.filters.department}&level=${filter.filters.level}&semester=${filter.filters.semester}&session=${filter.filters.session}`, { params: { ...filters, page, limit } });
+// Lists courses. Pass filters flat ({ department, level, semester, session, q,
+// schoolId, page, limit }) or nested under `filters`. Empty values and "All" are
+// dropped so they never reach the server as the literal text "undefined".
+export async function listCourses({ page, limit, filters = {}, ...flat } = {}) {
+  const merged = { ...filters, ...flat };
+  const params = { page, limit };
+  for (const [k, v] of Object.entries(merged)) {
+    if (v === undefined || v === null || v === "" || v === "All") continue;
+    params[k] = v;
+  }
+  const res = await api.get("/courses", { params });
   return res.data; // { courses, pagination }
 }
 

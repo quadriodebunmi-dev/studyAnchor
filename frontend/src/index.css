@@ -61,11 +61,9 @@
 
   body {
     @apply bg-slate-50 dark:bg-slate-950 text-night dark:text-slate-100 font-sans antialiased transition-colors;
-    /* Faint ruled-paper grid: this is a study app, so the ground reads as a
-       page rather than as a blank dashboard canvas. */
-    background-image: linear-gradient(rgb(var(--c-hairline) / 0.45) 1px, transparent 1px);
-    background-size: 100% 32px;
-    background-attachment: fixed;
+    /* Flat, quiet ground: content carries the page, not decoration. */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
   }
 
   h1, h2, h3, h4 {
@@ -108,13 +106,13 @@
 @layer components {
   /* A card is a sheet of paper on the ruled ground. */
   .lv-card {
-    @apply rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-card;
+    @apply rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm;
   }
 
   .lv-card-interactive {
     @apply lv-card transition-[transform,box-shadow,border-color] duration-200
-           hover:-translate-y-0.5 hover:shadow-lift hover:border-accent/60
-           active:translate-y-0 active:shadow-card;
+           hover:border-accent/60 hover:shadow-card
+           active:scale-[0.99];
   }
 
   /* Section heading with a short accent rule to its left — the structural
@@ -139,6 +137,49 @@
     content: "";
     @apply absolute inset-0 -translate-x-full animate-shimmer;
     background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.18), transparent);
+  }
+
+  /* Compact page header: title + optional action, used by every page. */
+  .lv-page-title {
+    @apply font-display text-lg font-bold leading-tight text-night dark:text-slate-50;
+  }
+
+  /* Horizontally scrolling chip row (filters, folders, tabs). */
+  .lv-chips {
+    @apply -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0;
+    scrollbar-width: none;
+  }
+  .lv-chips::-webkit-scrollbar { display: none; }
+  .lv-chip {
+    @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium
+           bg-slate-100 text-slate-600 transition-colors dark:bg-slate-800 dark:text-slate-300;
+  }
+  .lv-chip[aria-pressed="true"], .lv-chip-active {
+    @apply bg-primary text-primary-fg;
+  }
+
+  /* Underlined tab strip. */
+  .lv-tabs {
+    @apply -mx-4 flex gap-1 overflow-x-auto border-b border-slate-200 px-4 dark:border-slate-800 sm:mx-0 sm:px-0;
+    scrollbar-width: none;
+  }
+  .lv-tabs::-webkit-scrollbar { display: none; }
+  .lv-tab {
+    @apply whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-slate-500
+           transition-colors hover:text-night dark:hover:text-white;
+  }
+  .lv-tab[aria-selected="true"] {
+    @apply border-accent text-night dark:text-white;
+  }
+
+  /* Icon tile used by quick-nav grids. */
+  .lv-tile {
+    @apply flex flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-1 py-2.5 text-center
+           text-[11px] font-medium leading-tight text-night shadow-sm transition-[transform,border-color]
+           active:scale-95 hover:border-accent/60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100;
+  }
+  .lv-tile-icon {
+    @apply grid h-9 w-9 place-items-center rounded-lg bg-accent/20 text-highlight-deep dark:text-accent;
   }
 
   /* Safe-area padding for installed/standalone PWA windows. */

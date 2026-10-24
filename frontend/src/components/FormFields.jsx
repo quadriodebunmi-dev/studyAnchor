@@ -1,17 +1,29 @@
 import React, { useEffect, useRef, useState } from "react";
 
-const FIELD = `w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm
+const FIELD = `w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-base sm:text-sm
   text-night outline-none transition-colors
   placeholder-slate-400 hover:border-slate-400
   focus:border-accent focus:ring-2 focus:ring-accent/40
   dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100
   dark:placeholder-slate-500 dark:hover:border-slate-600`;
 
+// On blur, strip leading/trailing spaces from what the person typed and tell
+// React (via a real input event) so controlled fields update too. Passwords are never touched.
+function trimOnBlur(e, onBlur) {
+  const el = e.target;
+  if (el && el.type !== "password" && el.type !== "file" && typeof el.value === "string" && el.value !== el.value.trim()) {
+    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, el.value.trim());
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  onBlur?.(e);
+}
+
 export function Field({ label, hint, error, children }) {
   return (
     <label className="block">
       {label && (
-        <span className="mb-1.5 block text-sm font-medium text-night dark:text-slate-200">{label}</span>
+        <span className="mb-1 block text-[13px] font-medium text-night dark:text-slate-200">{label}</span>
       )}
       {children}
       {error ? (
@@ -38,6 +50,7 @@ export function Input({ icon, className = "", type = "text", ...props }) {
 
       <input
         {...props}
+        onBlur={(e) => trimOnBlur(e, props.onBlur)}
         type={isPassword && show ? "text" : type}
         className={`${FIELD} ${icon ? "pl-10" : ""} ${isPassword ? "pr-10" : ""} ${className}`}
       />
@@ -88,5 +101,5 @@ export function Select({ icon, children, className = "", ...props }) {
 }
 
 export function Textarea({ className = "", ...props }) {
-  return <textarea {...props} className={`${FIELD} min-h-24 resize-y ${className}`} />;
+  return <textarea {...props} onBlur={(e) => trimOnBlur(e, props.onBlur)} className={`${FIELD} min-h-20 resize-y ${className}`} />;
 }

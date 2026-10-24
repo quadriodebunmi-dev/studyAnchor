@@ -16,6 +16,8 @@ export default function DepartmentPicker({ schoolId, value, onChange, placeholde
   const [open, setOpen] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState("");
+  const [existing, setExisting] = useState(null); // the department that blocked a duplicate request
+  const [shortName, setShortName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const debounceRef = useRef(null);
   const containerRef = useRef(null);
@@ -59,21 +61,25 @@ export default function DepartmentPicker({ schoolId, value, onChange, placeholde
   async function handleRequestSubmit(e) {
     e.preventDefault();
     setRequestError("");
+    setExisting(null);
     const name = query.trim();
     if (!name) { setRequestError("Department name is required."); return; }
     setSubmitting(true);
     try {
-      const dept = await requestDepartment({ name, schoolId });
+      const dept = await requestDepartment({ name, shortName: shortName.trim() || undefined, schoolId });
       pick(dept);
       setRequesting(false);
+      setShortName("");
     } catch (err) {
+      // 409: it's already there (maybe under its abbreviation) — offer the existing one.
+      setExisting(err.department || null);
       setRequestError(err.message || "Couldn't add that department. Try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const exactMatch = results.some((d) => d.name.toLowerCase() === query.trim().toLowerCase());
+  const exactMatch = results.some((d) => d.name.toLowerCase() === query.trim().toLowerCase() || d.shortName?.toLowerCase() === query.trim().toLowerCase());
 
   return (
     <div ref={containerRef} className="relative">
@@ -95,7 +101,7 @@ export default function DepartmentPicker({ schoolId, value, onChange, placeholde
                   onClick={() => pick(d)}
                   className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  <span>{d.name}</span>
+                  <span>{d.name}{d.shortName ? <span className="text-slate-400"> ({d.shortName})</span> : null}</span>
                   {!d.verified && <span className="text-[10px] rounded-full bg-warning/20 text-warning px-2 py-0.5">Unverified</span>}
                 </button>
               ))}
@@ -116,10 +122,16 @@ export default function DepartmentPicker({ schoolId, value, onChange, placeholde
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
           <p className="text-sm font-medium">Add your department</p>
           <Input icon={<Search className="w-4 h-4" />} placeholder="Department name" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <Input placeholder="Short name (optional), e.g. MLS" maxLength={20} value={shortName} onChange={(e) => setShortName(e.target.value)} />
           {requestError && <p className="text-xs text-danger">{requestError}</p>}
+          {existing && (
+            <Button type="button" size="sm" variant="outline" onClick={() => { pick(existing); setRequesting(false); setExisting(null); setRequestError(""); }}>
+              Use {existing.name}{existing.shortName ? ` (${existing.shortName})` : ""}
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button type="button" size="sm" disabled={submitting} onClick={handleRequestSubmit}>{submitting ? "Adding..." : "Add department"}</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setRequesting(false)}>Cancel</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setRequesting(false); setRequestError(""); setExisting(null); }}>Cancel</Button>
           </div>
         </div>
       )}

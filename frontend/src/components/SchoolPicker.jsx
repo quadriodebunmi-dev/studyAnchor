@@ -15,6 +15,7 @@ export default function SchoolPicker({ value, onSelect }) {
   const [requesting, setRequesting] = useState(false);
   const [requestForm, setRequestForm] = useState({ name: "", domain: "", city: "" });
   const [requestError, setRequestError] = useState("");
+  const [existing, setExisting] = useState(null); // the school that blocked a duplicate request
   const [submitting, setSubmitting] = useState(false);
   const debounceRef = useRef(null);
   const containerRef = useRef(null);
@@ -49,6 +50,7 @@ export default function SchoolPicker({ value, onSelect }) {
   async function handleRequestSubmit(e) {
     e.preventDefault();
     setRequestError("");
+    setExisting(null);
     if (!requestForm.name.trim()) { setRequestError("School name is required."); return; }
     setSubmitting(true);
     try {
@@ -56,6 +58,8 @@ export default function SchoolPicker({ value, onSelect }) {
       pick(school);
       setRequesting(false);
     } catch (err) {
+      // 409: that school is already on the platform — offer it instead.
+      setExisting(err.school || null);
       setRequestError(err.message || "Couldn't add that school. Try again.");
     } finally {
       setSubmitting(false);
@@ -108,9 +112,14 @@ export default function SchoolPicker({ value, onSelect }) {
             <Input placeholder="City (optional)" value={requestForm.city} onChange={(e) => setRequestForm((f) => ({ ...f, city: e.target.value }))} />
           </div>
           {requestError && <p className="text-xs text-danger">{requestError}</p>}
+          {existing && (
+            <Button type="button" size="sm" variant="outline" onClick={() => { pick(existing); setRequesting(false); setExisting(null); setRequestError(""); }}>
+              Use {existing.name}
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button type="button" size="sm" disabled={submitting} onClick={handleRequestSubmit}>{submitting ? "Adding..." : "Add school"}</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setRequesting(false)}>Cancel</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setRequesting(false); setRequestError(""); setExisting(null); }}>Cancel</Button>
           </div>
         </div>
       )}

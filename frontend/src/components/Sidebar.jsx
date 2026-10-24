@@ -5,7 +5,7 @@ export default function Sidebar({ items, footer }) {
   return (
     <nav
       aria-label="Main"
-      className="hidden w-60 shrink-0 flex-col gap-1 border-r border-slate-200 px-3 py-6 dark:border-slate-800 lg:flex"
+      className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-slate-200 px-3 py-4 dark:border-slate-800 lg:flex"
     >
       {items.map((it) => (
         <NavLink
@@ -13,7 +13,7 @@ export default function Sidebar({ items, footer }) {
           to={it.to}
           end={it.end}
           className={({ isActive }) =>
-            `group relative flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+            `group relative flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
               isActive
                 ? "bg-primary text-primary-fg"
                 : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"

@@ -1,14 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Download, X, WifiOff, RefreshCw, Share, Plus } from "lucide-react";
 import { applyUpdate, SW_EVENTS } from "../pwa/registerSW.js";
+import { isIos, isStandalone, promptInstall, useInstall } from "../pwa/install.js";
 
 const RESHOW_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-const isStandalone = () =>
-  window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
-
-const isIos = () =>
-  /iphone|ipad|ipod/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
 
 /** Slim banner across the top of the app whenever the device drops offline. */
 export function OfflineBanner() {
@@ -78,52 +73,27 @@ export function UpdateToast() {
  * suppress it long-term.
  */
 export function InstallPrompt() {
-  const [deferred, setDeferred] = useState(null);
+  const { installed, canPrompt } = useInstall();
   const [visible, setVisible] = useState(false);
-  const [iosEligible, setIosEligible] = useState(false);
+  const deferred = canPrompt;
+  const iosEligible = isIos();
 
-  // Capture the browser's install event once, and note iOS eligibility.
+  // Drive visibility on a repeating timer: first show after 2s, then every
+  // RESHOW_INTERVAL_MS for as long as the app is still not installed.
   useEffect(() => {
-    if (isStandalone()) return;
-
-    const onBeforeInstall = (e) => {
-      e.preventDefault();
-      setDeferred(e);
-    };
-    window.addEventListener("beforeinstallprompt", onBeforeInstall);
-
-    const onInstalled = () => {
-      setDeferred(null);
-      setVisible(false);
-    };
-    window.addEventListener("appinstalled", onInstalled);
-
-    if (isIos()) setIosEligible(true);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
-
-  // Drive visibility on a repeating timer: first show after 8s (gives iOS
-  // users time to settle in), then every 10 minutes after that, for as long
-  // as the app is still not installed.
-  useEffect(() => {
-    if (isStandalone()) return;
+    if (installed || isStandalone()) return;
     if (!deferred && !iosEligible) return;
 
     const firstShow = setTimeout(() => setVisible(true), 2000);
     const interval = setInterval(() => {
       if (!isStandalone()) setVisible(true);
-      
     }, RESHOW_INTERVAL_MS);
 
     return () => {
       clearTimeout(firstShow);
       clearInterval(interval);
     };
-  }, [deferred, iosEligible]);
+  }, [deferred, iosEligible, installed]);
 
   function dismiss() {
     setVisible(false);
@@ -131,15 +101,11 @@ export function InstallPrompt() {
 
   async function install() {
     if (!deferred) return;
-    deferred.prompt();
-    await deferred.userChoice;
-    // Whatever the outcome, hide for now — the interval brings it back in
-    // 10 minutes if the app still isn't installed. If it WAS installed,
-    // the appinstalled listener above clears deferred/visible for good.
+    await promptInstall();
     setVisible(false);
   }
 
-  if (!visible || (!deferred && !iosEligible)) return null;
+  if (installed || !visible || (!deferred && !iosEligible)) return null;
 
   return (
     <div className="fixed inset-x-4 bottom-24 z-[80] animate-slide-up sm:inset-x-auto sm:right-6 sm:w-[22rem] lg:bottom-6">

@@ -8,8 +8,14 @@ export async function getMaterial(id) {
 // Stage 2.1 — one request can upload multiple files; returns every created
 // Material plus the count of any that failed and the resulting status
 // (students land in "pending", reps in "approved" — see Stage 2.2).
-export async function uploadMaterial(formData) {
-  const res = await api.post("/materials", formData, { headers: { "Content-Type": "multipart/form-data" } });
+// `onProgress(percent)` (optional) is called as bytes are sent, 0–100.
+export async function uploadMaterial(formData, onProgress) {
+  const res = await api.post("/materials", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress: onProgress
+      ? (e) => { if (e.total) onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100))); }
+      : undefined,
+  });
   return res.data; // { materials, failed, status }
 }
 
@@ -78,9 +84,25 @@ export async function myMaterials({ page, limit } = {}) {
 }
 
 // Stage 2.2 — a student's own uploads, across every status ("My uploads").
-export async function getMyUploads({ page, limit } = {}) {
-  const res = await api.get("/materials/mine/student", { params: { page, limit } });
+export async function getMyUploads({ page, limit, folder, q } = {}) {
+  const res = await api.get("/materials/mine/student", { params: { page, limit, folder, q } });
   return res.data; // { materials, pagination }
+}
+
+// What the study tools can pick from: your own library plus (when you're in a
+// school) that school's approved shared materials. Each row has
+// `source: "library" | "school"`.
+// `scope`: "all" = everything in study-anchor you can see; "mine" = your library
+// plus your current department / level / semester / session.
+export async function getPickableMaterials({ q, page, limit, scope } = {}) {
+  const res = await api.get("/materials/pickable", { params: { q: q || undefined, page, limit, scope: scope || undefined } });
+  return res.data; // { materials, pagination }
+}
+
+// Personal library folders with counts: [{ name, count }] (name "" = unfiled).
+export async function getMyFolders() {
+  const res = await api.get("/materials/folders");
+  return res.data.folders;
 }
 
 // Stage 2.2 — rep-only pending queue + approve/reject actions.

@@ -1,14 +1,15 @@
 import React from "react";
 
 /**
- * The Study Anchor mark: an open book with a peach bookmark ribbon.
- * Matches the installed app icon exactly, so the home-screen tile and the
- * in-app header read as the same product.
+ * The Study Anchor logo (graduation cap, open book, anchor). Same icon as the
+ * installed app tile, so the home screen and the in-app header match.
  */
-export default function BrandMark({ className = "h-9 w-9", rounded = true }) {
+export default function BrandMark({ className = "h-9 w-9" }) {
   return (
-    <>
-    <img className= "h-9 w-9" src="https://study-anchor.com/icons/icon-64.png" alt="logo" />
-    </>
+    <img
+      className={`${className} shrink-0 rounded-lg object-contain`}
+      src="https://study-anchor.com/icons/icon-64.png"
+      alt="Study Anchor logo"
+    />
   );
 }

@@ -35,55 +35,54 @@ const TILE = {
 export default function MaterialCard({ material, onOpen, isBookmarked, foreign }) {
   const Icon = ICONS[material.fileType] || FileText;
   const hasQuiz = material.quizzesGenerated > 15;
+  const courseCode = material.courseId?.code || material.course?.code;
+  const uploader = material.uploadedBy?.name || (typeof material.uploadedBy === "string" ? material.uploadedBy : "");
+  const when = material.createdAt || material.date;
 
   return (
-    <button
-      onClick={onOpen}
-      className="lv-card-interactive group w-full p-4 text-left"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className={`shrink-0 rounded-xl p-2.5 ${TILE[material.fileType] || TILE.docx}`}>
-            <Icon className="h-5 w-5" />
+    <button onClick={onOpen} className="lv-card-interactive group flex w-full items-start gap-3 p-3 text-left">
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${TILE[material.fileType] || TILE.docx}`}>
+        <Icon className="h-[18px] w-[18px]" />
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-semibold leading-snug text-night group-hover:text-primary dark:text-slate-100 line-clamp-2 break-words">
+          {material.title}
+        </span>
+
+        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] lv-meta">
+          <span className="font-medium">{fileTypeLabel(material.fileType)}</span>
+          {courseCode && <span>· {courseCode}</span>}
+          {uploader && <span className="max-w-[9rem] truncate">· {uploader}</span>}
+          {when && <span>· {new Date(when).toLocaleDateString()}</span>}
+          {material.size && <span>· {material.size}</span>}
+          <span className="inline-flex items-center gap-0.5">
+            · <Download className="h-3 w-3" /> {material.downloads}
           </span>
-          <div className="min-w-0">
-            <p className="font-display font-semibold leading-snug text-night group-hover:text-primary dark:text-slate-100">
-              {material.title}
-            </p>
-            <p className="mt-1 line-clamp-2 text-sm lv-meta">{material.description}</p>
-          </div>
-        </div>
-        <span className="shrink-0">
-          {isBookmarked ? (
-            <BookmarkCheck className="h-5 w-5 text-accent" />
-          ) : (
-            <Bookmark className="h-5 w-5 text-slate-400 transition-colors group-hover:text-accent" />
-          )}
         </span>
-      </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Badge tone="slate">{fileTypeLabel(material.fileType)}</Badge>
-        {foreign && <Badge tone="violet">Other department</Badge>}
-        {material.visibility === "private" && <Badge tone="violet">Private</Badge>}
-        {material.status === "pending" && <Badge tone="amber">Awaiting review</Badge>}
-        {material.status === "rejected" && <Badge tone="red">Rejected</Badge>}
-        {hasQuiz && (
-          <Badge tone="accent">
-            <Sparkles className="h-3 w-3" /> Quiz ready
-          </Badge>
+        {(foreign || material.visibility === "private" || material.status === "pending" || material.status === "rejected" || hasQuiz) && (
+          <span className="mt-1.5 flex flex-wrap gap-1">
+            {foreign && <Badge tone="violet">Other department</Badge>}
+            {material.visibility === "private" && <Badge tone="violet">Private</Badge>}
+            {material.status === "pending" && <Badge tone="amber">Awaiting review</Badge>}
+            {material.status === "rejected" && <Badge tone="red">Rejected</Badge>}
+            {hasQuiz && (
+              <Badge tone="accent">
+                <Sparkles className="h-3 w-3" /> Quiz ready
+              </Badge>
+            )}
+          </span>
         )}
-      </div>
+      </span>
 
-      <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs lv-meta dark:border-slate-800">
-        <span className="truncate">{material.uploadedBy?.name || material.uploadedBy}</span>
-        <span>{new Date(material.createdAt || material.date).toLocaleDateString()}</span>
-        {material.size && <span>{material.size}</span>}
-        <span className="ml-auto inline-flex items-center gap-1">
-          <Download className="h-3 w-3" />
-          {material.downloads}
-        </span>
-      </div>
+      <span className="shrink-0 pt-0.5">
+        {isBookmarked ? (
+          <BookmarkCheck className="h-[18px] w-[18px] text-accent" />
+        ) : (
+          <Bookmark className="h-[18px] w-[18px] text-slate-300 transition-colors group-hover:text-accent dark:text-slate-600" />
+        )}
+      </span>
     </button>
   );
 }

@@ -28,6 +28,22 @@ export async function updateProfile(data) {
   return res.data.user;
 }
 
+// `file` must be the already-edited picture (see AvatarEditor); `onProgress(percent)` is optional.
+export async function uploadAvatar(file, onProgress) {
+  const fd = new FormData();
+  fd.append("avatar", file);
+  const res = await api.put("/auth/me/avatar", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress: onProgress ? (e) => { if (e.total) onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100))); } : undefined,
+  });
+  return res.data.user;
+}
+
+export async function removeAvatar() {
+  const res = await api.delete("/auth/me/avatar");
+  return res.data.user;
+}
+
 export async function fetchMe() {
   const res = await api.get("/auth/me");
   return res.data.user;
