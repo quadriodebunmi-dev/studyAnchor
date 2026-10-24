@@ -8,6 +8,9 @@ import mongoose from "mongoose";
 const departmentSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
+    // Optional abbreviation, e.g. "MLS" for Medical Laboratory Science. Counts as
+    // the same department when checking for duplicates (see utils/dedupe.js).
+    shortName: { type: String, trim: true, uppercase: true, maxlength: 20 },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", index: true },
     verified: { type: Boolean, default: false },
   },

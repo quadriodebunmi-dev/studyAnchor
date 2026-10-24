@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { generateStudyTip } from "../utils/aiService.js";
 import { PUBLIC_MATERIAL_FILTER } from "../utils/materialAccess.js";
 import { findContextCourses } from "../utils/academicContext.js";
+import { isIndependent } from "../utils/learner.js";
 import { recentInteractions } from "../utils/interactions.js";
 import { escapeRegex } from "../utils/regex.js";
 import { parseFeedParams, feedMeta, sliceFeed } from "../utils/pagination.js";
@@ -70,7 +71,13 @@ export async function getFeedMaterials(req, res, next) {
     const q = String(req.query.q || "").trim().slice(0, 80);
     const { limit, offset, asOf } = parseFeedParams(req.query);
 
-    const school = user.schoolId ? { schoolId: user.schoolId } : {};
+    // No school = no school feed. (Their own library lives on the dashboard.)
+    if (isIndependent(user)) {
+      return res.json({ materials: [], pagination: feedMeta({ limit, offset, asOf, hasMore: false }), sort });
+    }
+
+    // A user with no school (legacy account) only ever sees untagged legacy rows, never another school's.
+    const school = user.schoolId ? { schoolId: user.schoolId } : { schoolId: null };
     const base = { ...school, ...PUBLIC_MATERIAL_FILTER, createdAt: { $lte: new Date(asOf) } };
 
     if (q) {
@@ -143,7 +150,7 @@ export async function getFeedMaterials(req, res, next) {
     for (const m of [...ownDocs, ...topical, ...popular]) pool.set(idStr(m._id), m);
     const candidates = [...pool.values()];
 
-    const courseIds = [...new Set(candidates.map((m) => idStr(m.courseId)))];
+    const courseIds = [...new Set(candidates.map((m) => idStr(m.courseId)))].filter(Boolean);
     const courseDocs = courseIds.length ? await Course.find({ _id: { $in: courseIds } }).select(COURSE_FIELDS).lean() : [];
     const courseById = new Map(courseDocs.map((c) => [idStr(c._id), c]));
 
@@ -206,6 +213,11 @@ export async function getExploreFeed(req, res, next) {
     const defaultSort = schoolId ? "relevance" : scope === "all" ? "school" : "relevance";
     const sort = EXPLORE_SORTS.includes(req.query.sort) ? req.query.sort : defaultSort;
     const { limit, offset, asOf } = parseFeedParams(req.query, { defaultLimit: 18, maxLimit: 40 });
+
+    // "My school" means nothing without one; don't fall through to every school.
+    if (isIndependent(user) && !schoolId && scope !== "all") {
+      return res.json({ courses: [], pagination: feedMeta({ limit, offset, asOf, hasMore: false }), sort });
+    }
 
     const filter = { createdAt: { $lte: new Date(asOf) } };
     if (schoolId) filter.schoolId = schoolId;

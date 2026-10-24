@@ -159,6 +159,12 @@ export const uploadLimiter = limiterFor("upload", {
   message: "Upload limit reached. Please try again in an hour.",
 });
 
+// Changing a profile picture.
+export const avatarLimiter = limiterFor("avatar", {
+  windowMs: HOUR, max: 15,
+  message: "You've changed your picture a lot — please try again in an hour.",
+});
+
 // AI quiz/theory generation — protects the Groq API quota.
 export const aiLimiter = limiterFor("ai", {
   windowMs: HOUR, max: 10,
@@ -176,4 +182,36 @@ export const tipLimiter = limiterFor("tip", {
 export const chatLimiter = limiterFor("chat", {
   windowMs: HOUR, max: 60,
   message: "You've reached the AI assistant limit for now. Please try again in an hour.",
+});
+
+// ---- Phases C–E: rooms, quizzes, study tools --------------------------------
+
+// Creating rooms / invites / join requests.
+export const roomWriteLimiter = limiterFor("room-write", {
+  windowMs: HOUR, max: 60,
+  message: "You're doing that a lot. Please try again in a bit.",
+});
+
+// Discussion messages — stops flooding without hurting normal chat.
+export const postLimiter = limiterFor("room-post", {
+  windowMs: MIN, max: 12,
+  message: "You're posting too quickly. Give it a few seconds.",
+});
+
+// Autosave fires every few seconds during a quiz attempt.
+export const quizSaveLimiter = limiterFor("quiz-save", {
+  windowMs: MIN, max: 60,
+  message: "Saving too quickly — your answers are still safe. Retrying shortly.",
+});
+
+// Anything that spends AI quota (the daily per-feature ceilings in config are the real cap).
+export const studyAiLimiter = limiterFor("study-ai", {
+  windowMs: HOUR, max: 40,
+  message: "AI request limit reached for now. Please try again in an hour.",
+});
+
+// Photo uploads for Snap a Question.
+export const snapUploadLimiter = limiterFor("snap-upload", {
+  windowMs: HOUR, max: 30,
+  message: "Photo limit reached for now. Please try again in an hour.",
 });

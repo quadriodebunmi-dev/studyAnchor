@@ -14,6 +14,10 @@ export async function authMiddleware(req, res, next) {
     if (user.suspended) return res.status(403).json({ message: "Your account has been suspended." });
 
     req.user = user;
+    // "Active user" metrics: touch at most once an hour so this costs ~nothing.
+    if (!user.lastActiveAt || Date.now() - user.lastActiveAt.getTime() > 3600 * 1000) {
+      User.updateOne({ _id: user._id }, { $set: { lastActiveAt: new Date() } }).catch(() => {});
+    }
     next();
   } catch (err) {
     return res.status(401).json({ message: "Invalid or expired session. Please log in again." });

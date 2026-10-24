@@ -2,12 +2,13 @@ import express from "express";
 import {
   uploadMaterial, getMaterial, updateMaterial, deleteMaterial,
   downloadMaterial, downloadAllMaterials, toggleBookmark, myBookmarks, myMaterials, myUploads,
-  searchMaterials, reportMaterial, pendingMaterials, approveMaterial, rejectMaterial,
+  searchMaterials, reportMaterial, pendingMaterials, approveMaterial, rejectMaterial, myFolders, pickableMaterials,
 } from "../controllers/materialController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { repApprovedMiddleware } from "../middleware/repApprovedMiddleware.js";
 import { userLimiter, uploadLimiter, searchLimiter, downloadLimiter, zipLimiter, reportLimiter } from "../middleware/rateLimitMiddleware.js";
 import upload from "../middleware/uploadMiddleware.js";
+import { trimInputs } from "../middleware/trimInputs.js";
 
 const router = express.Router();
 router.use(authMiddleware, userLimiter);
@@ -27,6 +28,9 @@ router.get("/bookmarks/mine", myBookmarks);
 router.get("/mine", repApprovedMiddleware, myMaterials);
 // Stage 2.2 — a student's own uploads (any status), for "My uploads".
 router.get("/mine/student", myUploads);
+router.get("/folders", myFolders);
+// Study tools: your library plus your school's shared materials.
+router.get("/pickable", pickableMaterials);
 
 // Stage 2.2 — rep-only pending queue + approve/reject actions.
 router.get("/pending", repApprovedMiddleware, pendingMaterials);
@@ -36,7 +40,7 @@ router.post("/:id/reject", repApprovedMiddleware, rejectMaterial);
 router.post("/download-all", zipLimiter, downloadAllMaterials);
 
 // Stage 2.1 — multi-file upload (up to 10 files per request).
-router.post("/", studentOrRep, uploadLimiter, upload.array("files", 10), uploadMaterial);
+router.post("/", studentOrRep, uploadLimiter, upload.array("files", 10), trimInputs, uploadMaterial); // multipart text fields are only parsed by multer, so trim after it
 
 router.get("/:id", getMaterial);
 // Owners (students included — e.g. deleting their own private upload) and admins;

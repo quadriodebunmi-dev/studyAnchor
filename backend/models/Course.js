@@ -7,7 +7,7 @@ const courseSchema = new mongoose.Schema(
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", index: true },
     title: { type: String, required: true },
     department: { type: String, required: true },
-    level: { type: Number, required: true, enum: [100, 200, 300, 400] },
+    level: { type: Number, required: true, enum: [100, 200, 300, 400, 500, 600] },
     semester: { type: String, required: true, enum: ["First Semester", "Second Semester"] },
     session: { type: String, required: true, trim: true }, // academic session/year, e.g. "2025/2026"
     description: { type: String, default: "" },

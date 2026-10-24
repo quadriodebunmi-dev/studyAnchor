@@ -9,6 +9,10 @@ import { ENV } from "../config/env.js";
 import { isValidEmail, isValidMatric, isValidPassword } from "../utils/validators.js";
 import { isValidSession } from "../utils/sessions.js";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
+import { isIndependent } from "../utils/learner.js";
+import { PLATFORM } from "../config/platform.js";
+import { validateAvatarFile } from "../utils/uploadValidation.js";
+import { uploadAvatar as uploadAvatarToCloud, deleteAvatar as deleteAvatarFromCloud } from "../utils/cloudinaryUpload.js";
 
 const googleClient = new OAuth2Client(ENV.googleClientId);
 
@@ -19,6 +23,7 @@ function signToken(user) {
 function publicUser(user) {
   const obj = user.toObject ? user.toObject() : user;
   delete obj.password;
+  delete obj.avatarPublicId; // storage detail, not for the client
   return obj;
 }
 
@@ -48,6 +53,21 @@ async function sendAuthResponse(res, user, status = 200) {
 export async function signup(req, res, next) {
   try {
     const { matricNumber, name, department, level, semester, session, email, password, schoolId } = req.body;
+
+    // "Continue as an Independent Learner": no school, matric number, department
+    // or level — just an account. They keep a private library and the AI tools.
+    if (req.body.learnerType === "independent") {
+      if (!name || !email || !password) return res.status(400).json({ message: "Name, email and password are required." });
+      if (!isValidEmail(email)) return res.status(400).json({ message: "Enter a valid email." });
+      if (!isValidPassword(password)) return res.status(400).json({ message: "Password must be at least 6 characters." });
+      if (await User.findOne({ email: email.toLowerCase() })) {
+        return res.status(409).json({ message: "An account with that email already exists." });
+      }
+      const hashed = await bcrypt.hash(password, 10);
+      const user = await User.create({ name: String(name).trim(), email, password: hashed, role: "student", learnerType: "independent" });
+      return await sendAuthResponse(res, user, 201);
+    }
+
     if (!matricNumber || !name || !department || !level || !semester || !session || !email || !password || !schoolId) {
       return res.status(400).json({ message: "All fields are required, including your school." });
     }
@@ -145,6 +165,12 @@ export async function googleLogin(req, res, next) {
       return await sendAuthResponse(res, user);
     }
 
+    // First-time Google sign-in, and they chose to continue as an independent learner.
+    if (req.body.learnerType === "independent") {
+      user = await User.create({ name: payload.name, email: payload.email, googleId: payload.sub, role: "student", learnerType: "independent" });
+      return await sendAuthResponse(res, user, 201);
+    }
+
     // First-time Google sign-in for this email — we don't have a student
     // profile yet. Tell the frontend to collect matric number / department /
     // level / session ONCE; it should never redirect here again afterwards
@@ -183,24 +209,47 @@ export async function me(req, res, next) {
 // PUT /api/auth/me  — logged-in user edits their own profile details.
 // Matric number, email and role are intentionally not editable here to
 // avoid identity/permission mixups; use the admin tools for those.
+// (Exception: someone who has no matric number yet — an independent learner
+// joining a school — may set one once.)
+//
+// Switching context never exposes anything it shouldn't: material access is
+// decided per request from the user's CURRENT schoolId, so moving school or
+// going independent immediately changes what they can see. Their own private
+// uploads always stay theirs.
 export async function updateProfile(req, res, next) {
   try {
-    const { name, department, level, semester, session, schoolId, currentPassword, newPassword } = req.body;
+    const { name, department, level, semester, session, schoolId, currentPassword, newPassword, learnerType, matricNumber } = req.body;
     const user = req.user;
 
     if (session !== undefined && session !== "" && !isValidSession(session)) {
       return res.status(400).json({ message: "Enter a valid academic session, e.g. 2025/2026." });
     }
-    if (level !== undefined && level !== "" && ![100, 200, 300, 400].includes(Number(level))) {
+    if (level !== undefined && level !== "" && ![100, 200, 300, 400, 500, 600].includes(Number(level))) {
       return res.status(400).json({ message: "Enter a valid level." });
+    }
+
+    // ---- leave school -> independent learner (students only) --------------
+    let wentIndependent = false;
+    if (learnerType === "independent" && !isIndependent(user)) {
+      if (user.role !== "student") {
+        return res.status(403).json({ message: "Only student accounts can become independent learners." });
+      }
+      user.learnerType = "independent";
+      user.schoolId = undefined;
+      user.department = undefined;
+      user.level = undefined;
+      user.semester = undefined;
+      user.session = undefined;
+      wentIndependent = true;
     }
 
     // Students and Reps can move to a different school; only Admins can't
     // (they aren't tied to one school in the first place). Department and
     // level must be re-chosen at the same time, since the old ones belong
-    // to the old school's structure.
+    // to the old school's structure. This is also the path an independent
+    // learner takes to join a school.
     let newSchool = null;
-    if (schoolId && String(schoolId) !== String(user.schoolId || "")) {
+    if (!wentIndependent && schoolId && String(schoolId) !== String(user.schoolId || "")) {
       if (user.role === "admin") {
         return res.status(403).json({ message: "Admins can't change school from their profile." });
       }
@@ -213,14 +262,26 @@ export async function updateProfile(req, res, next) {
       if (newSchool.levels?.length && !newSchool.levels.includes(String(level))) {
         return res.status(400).json({ message: "That level isn't offered at the school you selected." });
       }
+      if (isIndependent(user) && !user.matricNumber) {
+        if (!matricNumber || !isValidMatric(matricNumber)) {
+          return res.status(400).json({ message: "Enter your matric number to join a school." });
+        }
+        if (await User.findOne({ matricNumber, _id: { $ne: user._id } })) {
+          return res.status(409).json({ message: "An account with that matric number already exists." });
+        }
+        user.matricNumber = matricNumber;
+      }
       user.schoolId = newSchool._id;
+      user.learnerType = "school";
     }
 
     if (name) user.name = name;
-    if (department) user.department = department;
-    if (level) user.level = Number(level);
-    if (semester) user.semester = semester;
-    if (session) user.session = session;
+    if (!isIndependent(user)) {
+      if (department) user.department = department;
+      if (level) user.level = Number(level);
+      if (semester) user.semester = semester;
+      if (session) user.session = session;
+    }
 
     if (newPassword) {
       if (!isValidPassword(newPassword)) {
@@ -236,6 +297,7 @@ export async function updateProfile(req, res, next) {
 
     await user.save();
     if (newSchool) await ActivityLog.create({ action: `${user.name} changed school to ${newSchool.name}`, actor: user._id });
+    if (wentIndependent) await ActivityLog.create({ action: `${user.name} became an independent learner`, actor: user._id });
     res.json({ user: await publicUserWithSchool(user) });
   } catch (err) { next(err); }
 }
@@ -285,4 +347,35 @@ export async function resetPassword(req, res, next) {
   } catch (err) {
     res.status(400).json({ message: "Reset link is invalid or has expired." });
   }
+}
+// PUT /api/auth/me/avatar  (multipart, field "avatar")
+// The browser's editor sends ONLY the cropped, resized picture — never the original photo.
+export async function setAvatar(req, res, next) {
+  try {
+    const check = validateAvatarFile(req.file, PLATFORM.profile.avatarMaxBytes);
+    if (!check.ok) return res.status(400).json({ message: check.message });
+    let result;
+    try {
+      result = await uploadAvatarToCloud(req.file.buffer, req.user._id);
+    } catch (err) {
+      console.error("Avatar upload failed:", err.message);
+      return res.status(502).json({ message: "Couldn't save your picture. Please try again." });
+    }
+    req.user.avatarUrl = result.secure_url;
+    req.user.avatarPublicId = result.public_id;
+    await req.user.save();
+    res.json({ user: await publicUserWithSchool(req.user) });
+  } catch (err) { next(err); }
+}
+
+// DELETE /api/auth/me/avatar
+export async function removeAvatar(req, res, next) {
+  try {
+    const publicId = req.user.avatarPublicId;
+    req.user.avatarUrl = "";
+    req.user.avatarPublicId = "";
+    await req.user.save();
+    await deleteAvatarFromCloud(publicId);
+    res.json({ user: await publicUserWithSchool(req.user) });
+  } catch (err) { next(err); }
 }

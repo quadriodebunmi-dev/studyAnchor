@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 
 const materialSchema = new mongoose.Schema(
   {
-    courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
+    // Optional: an independent learner's personal material belongs to no course.
+    // School uploads always set it (enforced in the upload controller).
+    courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
     // Multi-tenancy (Stage 1.3) — denormalized for direct filtering even
     // though it's reachable via courseId. See migration note in models/User.js.
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", index: true },
@@ -30,6 +32,15 @@ const materialSchema = new mongoose.Schema(
     //              their dashboard, and it never needs approval.
     visibility: { type: String, enum: ["class", "private"], default: "class" },
 
+    // Personal organisation (independent learners and private uploads): a single
+    // folder name plus free tags, so a library can be browsed and filtered.
+    folder: { type: String, trim: true, maxlength: 60, default: "" },
+    tags: { type: [String], default: [] },
+
+    // AI study-topic cache for the flashcard generator (see utils/aiStudy.js).
+    studyTopics: { type: [{ title: String, summary: String, _id: false }], default: undefined },
+    studyTopicsAt: { type: Date },
+
     // Feed-ranking signals (see utils/feedRanking.js). Old documents simply
     // don't have them yet — every reader treats a missing value as 0 / derives
     // topics from the title. `npm run backfill:feed` fills them in.
@@ -49,5 +60,6 @@ materialSchema.index({ courseId: 1, status: 1, createdAt: -1 });
 materialSchema.index({ uploadedBy: 1, createdAt: -1 });
 materialSchema.index({ status: 1, createdAt: -1 });
 materialSchema.index({ topics: 1 });
+materialSchema.index({ uploadedBy: 1, visibility: 1, folder: 1, createdAt: -1 });
 
 export default mongoose.model("Material", materialSchema);

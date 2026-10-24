@@ -6,6 +6,9 @@ import ActivityLog from "../models/ActivityLog.js";
 import { sendRepDecisionEmail } from "../utils/mailer.js";
 import { paginate } from "../utils/pagination.js";
 import { escapeRegex } from "../utils/regex.js";
+import { notifyUser } from "../utils/notify.js";
+import { audit } from "../utils/audit.js";
+import { canSuspend } from "../utils/adminGuards.js";
 
 const NO_TEXT = "-extractedText"; // extracted file text is large and never shown in a list
 
@@ -25,6 +28,8 @@ export async function approveRep(req, res, next) {
     const rep = await User.findByIdAndUpdate(req.params.id, { repStatus: "active" }, { new: true });
     if (!rep) return res.status(404).json({ message: "Applicant not found." });
     await ActivityLog.create({ action: `Admin approved Course Rep application from ${rep.name}`, actor: req.user._id });
+    audit(req, "rep.approve", { targetType: "user", targetId: rep._id, summary: `Approved Course Rep application: ${rep.name}` });
+    notifyUser(rep._id, { category: "system", type: "rep_approved", title: "Your Course Rep application was approved", body: "You can now upload and manage materials for your courses.", link: "/", dedupeKey: `rep:${rep._id}:approved` });
     try {
       await sendRepDecisionEmail(rep.email, rep.name, true);
     } catch (mailErr) {
@@ -41,6 +46,8 @@ export async function rejectRep(req, res, next) {
     const rep = await User.findByIdAndUpdate(req.params.id, { repStatus: "rejected", rejectionReason: reason || "Not specified" }, { new: true });
     if (!rep) return res.status(404).json({ message: "Applicant not found." });
     await ActivityLog.create({ action: `Admin rejected Course Rep application from ${rep.name}`, actor: req.user._id });
+    audit(req, "rep.reject", { targetType: "user", targetId: rep._id, summary: `Rejected Course Rep application: ${rep.name}`, meta: { reason } });
+    notifyUser(rep._id, { category: "system", type: "rep_rejected", title: "Update on your Course Rep application", body: rep.rejectionReason || "Your application wasn't approved.", link: "/", dedupeKey: `rep:${rep._id}:rejected` });
     try {
       await sendRepDecisionEmail(rep.email, rep.name, false, rep.rejectionReason);
     } catch (mailErr) {
@@ -68,10 +75,13 @@ export async function toggleSuspendUser(req, res, next) {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found." });
-    if (user.role === "admin") return res.status(400).json({ message: "Admins can't be suspended." });
+    const guard = canSuspend({ actor: req.user, target: user });
+    if (!guard.ok) return res.status(400).json({ message: guard.message });
     user.suspended = !user.suspended;
+    user.suspendedReason = user.suspended ? String(req.body?.reason || "").trim().slice(0, 200) || undefined : undefined;
     await user.save();
     await ActivityLog.create({ action: `Admin ${user.suspended ? "suspended" : "reactivated"} ${user.name}`, actor: req.user._id });
+    audit(req, user.suspended ? "user.suspend" : "user.reactivate", { targetType: "user", targetId: user._id, summary: `${user.suspended ? "Suspended" : "Reactivated"} ${user.name}`, meta: { reason: user.suspendedReason } });
     res.json({ user });
   } catch (err) { next(err); }
 }
@@ -102,6 +112,7 @@ export async function removeMaterial(req, res, next) {
     const material = await Material.findByIdAndDelete(req.params.id);
     if (!material) return res.status(404).json({ message: "Material not found." });
     await ActivityLog.create({ action: `Admin removed material "${material.title}"`, actor: req.user._id });
+    audit(req, "material.remove", { targetType: "material", targetId: material._id, summary: `Removed material "${material.title}"` });
     res.json({ message: "Material removed." });
   } catch (err) { next(err); }
 }
@@ -123,6 +134,7 @@ export async function resolveReport(req, res, next) {
     const report = await Report.findByIdAndUpdate(req.params.id, { status: "resolved" }, { new: true });
     if (!report) return res.status(404).json({ message: "Report not found." });
     await ActivityLog.create({ action: "Admin resolved a content report", actor: req.user._id });
+    audit(req, "report.resolve", { targetType: "report", targetId: report._id, summary: "Resolved a material report" });
     res.json({ report });
   } catch (err) { next(err); }
 }
@@ -152,7 +164,7 @@ export async function getPlatformAnalytics(req, res, next) {
       User.countDocuments({ role: "rep", repStatus: "pending" }),
       Material.countDocuments(),
       Course.countDocuments(),
-      Material.aggregate([{ $group: { _id: "$courseId", downloads: { $sum: "$downloads" } } }]),
+      Material.aggregate([{ $match: { courseId: { $exists: true, $ne: null } } }, { $group: { _id: "$courseId", downloads: { $sum: "$downloads" } } }]),
       Course.find().select("department").lean(),
       Material.find().sort({ downloads: -1 }).limit(5).select("title downloads").lean(),
     ]);

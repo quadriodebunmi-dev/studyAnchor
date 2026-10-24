@@ -5,17 +5,38 @@ import ActivityLog from "../models/ActivityLog.js";
 import Report from "../models/Report.js";
 import { extractText, inferFileType } from "../utils/fileParser.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
-import { canViewMaterial, viewableFilter, PUBLIC_MATERIAL_FILTER } from "../utils/materialAccess.js";
+import { canViewMaterial, viewableFilter, PUBLIC_MATERIAL_FILTER, publicFilterFor, canAccessSchool } from "../utils/materialAccess.js";
+import { isIndependent } from "../utils/learner.js";
+import { notifyNewMaterial } from "../utils/materialNotify.js";
+import { notifyUser } from "../utils/notify.js";
+import { validateUploadedFile, SCHOOL_EXTENSIONS, PERSONAL_EXTENSIONS } from "../utils/uploadValidation.js";
+import { escapeRegex } from "../utils/regex.js";
 import { paginate, paginateArray } from "../utils/pagination.js";
 import { extractTopics } from "../utils/feedRanking.js";
 import { trackInteraction } from "../utils/interactions.js";
-import { findContextCourses } from "../utils/academicContext.js";
+import { findContextCourses, contextCourseFilter } from "../utils/academicContext.js";
 
 const COURSE_FIELDS = "code title department level semester session";
 // Extracted file text can be huge and no list or card needs it.
 const NO_TEXT = "-extractedText";
 
 const sameSchool = (a, b) => !a || !b || String(a) === String(b);
+
+// Folder + tags for personal organisation. Always trimmed and bounded.
+const cleanFolder = (v) => String(v ?? "").trim().slice(0, 60);
+const cleanTags = (v) => {
+  const arr = Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [];
+  return [...new Set(arr.map((t) => String(t).trim().toLowerCase().slice(0, 30)).filter(Boolean))].slice(0, 10);
+};
+
+// An upload's title is always its file name (without the extension), so
+// "Chapter 3 - Cell Biology.pdf" is listed as "Chapter 3 - Cell Biology".
+// It can still be renamed afterwards through PUT /api/materials/:id.
+const titleFromFileName = (fileName) => {
+  const name = String(fileName || "").trim();
+  const withoutExt = name.replace(/\.[A-Za-z0-9]{1,5}$/, "").trim();
+  return (withoutExt || name || "Untitled").slice(0, 200);
+};
 
 // POST /api/materials  (student or Course Rep, multipart/form-data with "files")
 // Stage 2.1 — multiple files per request, one Material per file.
@@ -27,23 +48,50 @@ const sameSchool = (a, b) => !a || !b || String(a) === String(b);
 // Course Reps always upload straight to the class (auto-approved).
 export async function uploadMaterial(req, res, next) {
   try {
-    const { courseId, title, description, visibility: requested } = req.body;
-    if (!courseId || !title || !req.files?.length) {
-      return res.status(400).json({ message: "courseId, title and at least one file are required." });
+    const { courseId, description, visibility: requested } = req.body;
+    if (!req.files?.length) {
+      return res.status(400).json({ message: "Choose at least one file to upload." });
     }
     if (requested !== undefined && !["class", "private"].includes(requested)) {
       return res.status(400).json({ message: "visibility must be \"class\" or \"private\"." });
     }
-    const course = await Course.findById(courseId);
-    if (!course) return res.status(404).json({ message: "Course not found." });
-    if (!sameSchool(course.schoolId, req.user.schoolId)) {
-      return res.status(403).json({ message: "You can only upload to courses at your own school." });
+
+    // Personal material: no course. Independent learners can ONLY upload this way;
+    // school students may also keep course-less private notes. Always private.
+    const independent = isIndependent(req.user);
+    const personal = independent || !courseId;
+    if (independent && courseId) {
+      return res.status(403).json({ message: "Independent learners keep a private library — join a school to upload to its courses." });
+    }
+    if (personal && req.user.role !== "student") {
+      return res.status(400).json({ message: "courseId is required." });
+    }
+    if (personal && requested === "class") {
+      return res.status(400).json({ message: "Personal materials stay private. Choose a course to share with a class." });
+    }
+
+    // Check every file's extension AND real bytes before anything is stored.
+    const allowed = independent ? PERSONAL_EXTENSIONS : SCHOOL_EXTENSIONS;
+    for (const file of req.files) {
+      const check = validateUploadedFile(file, allowed);
+      if (!check.ok) return res.status(400).json({ message: check.message });
+    }
+
+    let course = null;
+    if (!personal) {
+      course = await Course.findById(courseId);
+      if (!course) return res.status(404).json({ message: "Course not found." });
+      if (!sameSchool(course.schoolId, req.user.schoolId)) {
+        return res.status(403).json({ message: "You can only upload to courses at your own school." });
+      }
     }
 
     const isStudent = req.user.role === "student";
-    const isPrivate = isStudent && requested === "private";
+    const isPrivate = personal || (isStudent && requested === "private");
     const visibility = isPrivate ? "private" : "class";
     const status = isStudent && !isPrivate ? "pending" : "approved";
+    const folder = cleanFolder(req.body.folder);
+    const tags = cleanTags(req.body.tags);
 
     const results = await Promise.allSettled(
       req.files.map(async (file) => {
@@ -52,11 +100,14 @@ export async function uploadMaterial(req, res, next) {
           extractText(file.buffer, fileType),
           uploadBufferToCloudinary(file.buffer, file.originalname, fileType),
         ]);
+        const title = titleFromFileName(file.originalname);
         return Material.create({
-          courseId,
+          courseId: course?._id,
           uploadedBy: req.user._id,
-          schoolId: req.user.schoolId || course.schoolId,
-          title: req.files.length > 1 ? `${title} — ${file.originalname}` : title,
+          schoolId: req.user.schoolId || course?.schoolId,
+          folder,
+          tags,
+          title,
           description,
           fileUrl: cloudinaryResult.secure_url,
           fileName: file.originalname,
@@ -67,7 +118,7 @@ export async function uploadMaterial(req, res, next) {
           topics: extractTopics({
             title,
             description,
-            courseText: `${course.code} ${course.title}`,
+            courseText: course ? `${course.code} ${course.title}` : "",
             body: extractedText,
           }),
           status,
@@ -85,8 +136,10 @@ export async function uploadMaterial(req, res, next) {
     // Private titles stay out of the admin-visible activity feed.
     const action = isPrivate
       ? `${req.user.name} saved ${materials.length} file(s) privately`
-      : `${req.user.name} ${status === "pending" ? "submitted (pending approval)" : "uploaded"} ${materials.length} file(s) to "${title}"`;
+      : `${req.user.name} ${status === "pending" ? "submitted (pending approval)" : "uploaded"} ${materials.length} file(s)${course ? ` to ${course.code}` : ""}`;
     await ActivityLog.create({ action, actor: req.user._id });
+    // Rep/admin uploads are approved on the spot — tell the students of that course.
+    if (status === "approved" && visibility === "class") materials.forEach((m) => notifyNewMaterial(m));
     res.status(201).json({ materials, failed, status, visibility });
   } catch (err) { next(err); }
 }
@@ -114,6 +167,8 @@ export async function updateMaterial(req, res, next) {
     const { title, description } = req.body;
     if (title) material.title = title;
     if (description !== undefined) material.description = description;
+    if (req.body.folder !== undefined) material.folder = cleanFolder(req.body.folder);
+    if (req.body.tags !== undefined) material.tags = cleanTags(req.body.tags);
     if (title || description !== undefined) {
       const course = await Course.findById(material.courseId).select("code title");
       material.topics = extractTopics({
@@ -213,7 +268,7 @@ export async function searchMaterials(req, res, next) {
     const { items, pagination } = await paginate(Material, {
       $text: { $search: q },
       // Shared, approved materials — plus the caller's own private ones.
-      $or: [PUBLIC_MATERIAL_FILTER, { uploadedBy: req.user._id, visibility: "private" }],
+      $or: [publicFilterFor(req.user), { uploadedBy: req.user._id, visibility: "private" }],
     }, req.query, {
       sort: { score: { $meta: "textScore" } },
       select: { extractedText: 0, score: { $meta: "textScore" } },
@@ -246,10 +301,79 @@ export async function myMaterials(req, res, next) {
 // uploads, across every status, for the "My uploads" page.
 export async function myUploads(req, res, next) {
   try {
-    const { items, pagination } = await paginate(Material, { uploadedBy: req.user._id }, req.query, {
+    const filter = { uploadedBy: req.user._id };
+    if (req.query.folder !== undefined && req.query.folder !== "") {
+      filter.folder = req.query.folder === "__none__" ? "" : cleanFolder(req.query.folder);
+    }
+    const q = String(req.query.q || "").trim().slice(0, 80);
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), "i");
+      filter.$or = [{ title: rx }, { description: rx }, { fileName: rx }, { tags: rx }];
+    }
+    const { items, pagination } = await paginate(Material, filter, req.query, {
       select: NO_TEXT, populate: [["courseId", COURSE_FIELDS]], defaultLimit: 10,
     });
     res.json({ materials: items, pagination });
+  } catch (err) { next(err); }
+}
+
+// GET /api/materials/folders — the caller's folders with counts (for the library sidebar).
+export async function myFolders(req, res, next) {
+  try {
+    const rows = await Material.aggregate([
+      { $match: { uploadedBy: req.user._id } },
+      { $group: { _id: "$folder", count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]);
+    res.json({ folders: rows.map((r) => ({ name: r._id || "", count: r.count })) });
+  } catch (err) { next(err); }
+}
+
+// GET /api/materials/pickable?q=&scope=all|mine&page=&limit=
+// What the study tools (flashcards, mock exams, room-quiz generator) let you
+// choose from. `scope` decides how wide the search is:
+//   all  (default) — your own library AND every approved material you may see in
+//                    study-anchor (your school's shared materials).
+//   mine           — your own library AND approved materials from the courses of
+//                    your current department, level, semester and session.
+// Independent learners only ever have their library, whatever the scope.
+// Every row is something canViewMaterial() would allow, so the tools' own access
+// checks still pass. Each row says where it came from (`source`: library | school).
+export async function pickableMaterials(req, res, next) {
+  try {
+    const user = req.user;
+    const scope = req.query.scope === "mine" ? "mine" : "all";
+    const branches = [{ uploadedBy: user._id }];
+    const schoolMember = !isIndependent(user) && user.role !== "admin";
+    if (schoolMember) {
+      if (scope === "mine") {
+        const ctxCourses = await Course.find(contextCourseFilter(user)).select("_id").limit(500).lean();
+        if (ctxCourses.length) {
+          branches.push({ $and: [publicFilterFor(user), { courseId: { $in: ctxCourses.map((c) => c._id) } }] });
+        }
+      } else {
+        branches.push(publicFilterFor(user));
+      }
+    }
+
+    const filter = { $or: branches };
+    const q = String(req.query.q || "").trim().slice(0, 80);
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), "i");
+      const textMatch = [{ title: rx }, { fileName: rx }, { tags: rx }];
+      if (schoolMember) {
+        const codes = await Course.find({ code: rx, ...(user.schoolId ? { schoolId: user.schoolId } : {}) }).select("_id").limit(50).lean();
+        if (codes.length) textMatch.push({ courseId: { $in: codes.map((c) => c._id) } });
+      }
+      filter.$and = [{ $or: textMatch }];
+    }
+
+    const { items, pagination } = await paginate(Material, filter, req.query, {
+      select: NO_TEXT, populate: [["courseId", COURSE_FIELDS]], defaultLimit: 8, maxLimit: 30, lean: true,
+    });
+    const mine = String(user._id);
+    const materials = items.map((m) => ({ ...m, source: String(m.uploadedBy) === mine ? "library" : "school" }));
+    res.json({ materials, pagination, scope });
   } catch (err) { next(err); }
 }
 
@@ -294,6 +418,8 @@ export async function approveMaterial(req, res, next) {
     material.reviewNote = undefined;
     await material.save();
     await ActivityLog.create({ action: `${req.user.name} approved a student upload: "${material.title}"`, actor: req.user._id });
+    notifyUser(material.uploadedBy, { category: "materials", type: "upload_approved", title: "Your upload was approved", body: material.title, link: `/material/${material._id}`, dedupeKey: `material:${material._id}:approved` });
+    notifyNewMaterial(material);
     res.json({ material });
   } catch (err) { next(err); }
 }

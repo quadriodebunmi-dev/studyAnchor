@@ -2,6 +2,16 @@ import School from "../models/School.js";
 import Course from "../models/Course.js";
 import { escapeRegex } from "../utils/regex.js";
 import { paginate } from "../utils/pagination.js";
+import { findDuplicateSchool, normalizeDomain } from "../utils/dedupe.js";
+
+// Loads just enough of every school to compare names/domains. School counts are
+// small (hundreds, maybe a few thousand), so one lean read beats a fuzzy query.
+const allSchoolNames = () => School.find({}, "name domain city").limit(10000).lean();
+
+const duplicateSchoolMessage = ({ school, reason }) =>
+  reason === "domain"
+    ? `A school with that website domain already exists: ${school.name}.`
+    : `${school.name} is already on the platform — search for it instead of adding it again.`;
 
 
 // GET /api/schools?q=  — typeahead for signup
@@ -19,16 +29,15 @@ export async function searchSchools(req, res, next) {
 // POST /api/schools  — anyone can request a new school; goes in unverified
 export async function requestSchool(req, res, next) {
   try {
-    const { name, domain, city } = req.body;
+    const { name: rawName, domain, city } = req.body;
+    const name = String(rawName ?? "").trim().replace(/\s+/g, " ");
     if (!name) return res.status(400).json({ message: "School name is required." });
 
-    // Cheap duplicate guard: exact case-insensitive name or domain match.
-    const dupe = await School.findOne({
-      $or: [{ name: new RegExp(`^${escapeRegex(name.trim())}$`, "i") }, ...(domain ? [{ domain: domain.toLowerCase() }] : [])],
-    });
-    if (dupe) return res.status(409).json({ message: "A school with that name or domain already exists.", school: dupe });
+    // Same school typed differently ("Lens University", "lens university , Ilemona") is still a duplicate.
+    const dupe = findDuplicateSchool(await allSchoolNames(), { name, domain });
+    if (dupe) return res.status(409).json({ message: duplicateSchoolMessage(dupe), school: dupe.school });
 
-    const school = await School.create({ name, domain, city, verified: false });
+    const school = await School.create({ name, domain: normalizeDomain(domain) || undefined, city, verified: false });
     res.status(201).json({ school });
   } catch (err) { next(err); }
 }
@@ -61,12 +70,23 @@ export async function updateSchool(req, res, next) {
   try {
     const { name, domain, city, orgUnitLabel, termStructure, levels } = req.body;
     const update = {};
-    if (name !== undefined) update.name = name;
-    if (domain !== undefined) update.domain = domain;
+    if (name !== undefined) update.name = String(name).trim().replace(/\s+/g, " ");
+    if (domain !== undefined) update.domain = normalizeDomain(domain);
     if (city !== undefined) update.city = city;
     if (orgUnitLabel !== undefined) update.orgUnitLabel = orgUnitLabel;
     if (termStructure !== undefined) update.termStructure = termStructure;
     if (levels !== undefined) update.levels = levels;
+
+    if (update.name === "") return res.status(400).json({ message: "School name is required." });
+    if (update.name || update.domain) {
+      const current = await School.findById(req.params.id).select("name domain").lean();
+      if (!current) return res.status(404).json({ message: "School not found." });
+      const dupe = findDuplicateSchool(await allSchoolNames(), {
+        name: update.name ?? current.name,
+        domain: update.domain ?? current.domain,
+      }, req.params.id);
+      if (dupe) return res.status(409).json({ message: duplicateSchoolMessage(dupe), school: dupe.school });
+    }
 
     const school = await School.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
     if (!school) return res.status(404).json({ message: "School not found." });

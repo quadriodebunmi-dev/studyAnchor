@@ -1,3 +1,4 @@
+import { onPersonalQuizSubmitted } from "../utils/rewardHooks.js";
 import Quiz from "../models/Quiz.js";
 import QuizAttempt from "../models/QuizAttempt.js";
 import Material from "../models/Material.js";
@@ -100,6 +101,7 @@ export async function getQuiz(req, res, next) {
 export async function submitQuiz(req, res, next) {
   try {
     const { answers } = req.body;
+    if (!Array.isArray(answers)) return res.status(400).json({ message: "answers must be a list." });
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: "Quiz not found." });
 
@@ -118,6 +120,7 @@ export async function submitQuiz(req, res, next) {
       total: quiz.questions.length,
     });
 
+    onPersonalQuizSubmitted({ userId: req.user._id, attemptId: attempt._id, total: quiz.questions.length, answered: answers.filter((a) => a !== null && a !== undefined && a !== "").length });
     res.json({ attempt, score, total: quiz.questions.length, results });
   } catch (err) { next(err); }
 }

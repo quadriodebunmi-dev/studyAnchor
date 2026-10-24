@@ -6,6 +6,9 @@ export const ENV = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || "development",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  // Comma-separated browser origins allowed by CORS and Socket.IO.
+  allowedOrigins: (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || "http://localhost:5173")
+    .split(",").map((o) => o.trim()).filter(Boolean),
   mongoUri: process.env.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET || "dev_secret_change_me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
@@ -24,6 +27,13 @@ export const ENV = {
   // Optional. When set, rate-limit counters live in Redis so they're shared
   // across server instances (needed on Vercel/serverless). Unset = in-memory.
   redisUrl: process.env.REDIS_URL,
+  // Realtime (Socket.IO) needs a long-running server. On Vercel/serverless it is
+  // skipped automatically and the app falls back to REST polling.
+  realtimeEnabled: process.env.REALTIME_ENABLED !== "false" && !process.env.VERCEL,
+  // Secret for POST /api/internal/cron (Vercel Cron or any external scheduler).
+  cronSecret: process.env.CRON_SECRET,
+  // false (default): a user only sees shared materials from their OWN school.
+  crossSchoolMaterials: process.env.ALLOW_CROSS_SCHOOL_MATERIALS === "true",
   email: {
     user: process.env.EMAIL_USER,
     password: process.env.EMAIL_PASSWORD,
