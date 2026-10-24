@@ -16,6 +16,10 @@ import { markStudyTipForNextLoad } from "../../components/StudyTipModal.jsx";
 
 export default function SignupPage() {
   const [form, setForm] = useState({ semester: SEMESTERS[0], session: SESSIONS[0] });
+  // "school" = the full student account; "independent" = just name/email/password,
+  // a private library and the AI tools, no school required.
+  const [mode, setMode] = useState("school");
+  const independent = mode === "independent";
   const [school, setSchool] = useState(null);
   // Stage 1.4 — once a school is picked, its own level scheme and the
   // departments already in use there replace the generic app-wide defaults.
@@ -37,6 +41,21 @@ export default function SignupPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    if (independent) {
+      if (!form.name || !form.email || !form.password) { setError("Please fill in all fields."); return; }
+      setLoading(true);
+      try {
+        const user = await signup({ learnerType: "independent", name: form.name, email: form.email, password: form.password });
+        markStudyTipForNextLoad();
+        setUser(user);
+        navigate("/");
+      } catch (err) {
+        setError(err.message || "Signup failed.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (!school) { setError("Select your school first."); return; }
     if (!form.matricNumber || !form.name || !form.department || !form.level || !form.session || !form.email || !form.password) {
       setError("Please fill in all fields."); return;
@@ -62,7 +81,7 @@ export default function SignupPage() {
     if (!idToken) { setError("Google didn't return a valid credential. Please try again."); return; }
     setError(""); setGoogleBusy(true);
     try {
-      const result = await googleLogin({ idToken });
+      const result = await googleLogin({ idToken, ...(independent ? { learnerType: "independent" } : {}) });
       if (result.code === "NEEDS_PROFILE") {
         navigate("/google-continue", { state: { idToken, email: result.email, name: result.name } });
       } else if (result.user) {
@@ -87,25 +106,34 @@ export default function SignupPage() {
         </div>
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
           <form onSubmit={handleSubmit} className="space-y-3">
-            <p className="font-semibold">Create your student account</p>
+            <p className="font-semibold">Create your account</p>
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 text-sm dark:bg-slate-800" role="tablist" aria-label="Account type">
+              {[["school", "I'm in a University"], ["independent", "Independent learner"]].map(([k, l]) => (
+                <button type="button" key={k} role="tab" aria-selected={mode === k} onClick={() => { setMode(k); setError(""); }}
+                  className={`rounded-lg px-3 py-2 font-medium transition-colors ${mode === k ? "bg-white shadow-card dark:bg-slate-900" : "text-slate-500"}`}>{l}</button>
+              ))}
+            </div>
+            {independent && <p className="text-xs lv-meta">No university needed. Keep a private library of PDFs, documents, slides, spreadsheets and images and use the AI study tools. You can join a school later from your profile.</p>}
             <GoogleContinueButton onSuccess={handleGoogleSuccess} onError={setError} busy={googleBusy} />
             <div className="flex items-center gap-3 py-1">
               <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
               <span className="text-xs lv-meta">or sign up with email</span>
               <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
             </div>
-            <Field label="School">
-              <SchoolPicker value={school} onSelect={setSchool} />
-            </Field>
-            <Input icon={<Hash className="w-4 h-4" />} placeholder="Matric Number" onChange={(e) => update("matricNumber", e.target.value)} />
+            {!independent && (
+              <Field label="School">
+                <SchoolPicker value={school} onSelect={setSchool} />
+              </Field>
+            )}
+            {!independent && <Input icon={<Hash className="w-4 h-4" />} placeholder="Matric Number" onChange={(e) => update("matricNumber", e.target.value)} />}
             <Input placeholder="Full Name" onChange={(e) => update("name", e.target.value)} />
-            <DepartmentPicker
+            {!independent && <DepartmentPicker
               value={form.department}
               onChange={(v) => update("department", v)}
               schoolId={school?._id}
-              placeholder={structure?.orgUnitLabel ? `Search for your ${structure.orgUnitLabel} / Department` : "Search for your department"}
-            />
-            <div className="grid grid-cols-2 gap-3">
+              placeholder={"Search for your department"}
+            />}
+            {!independent && <div className="grid grid-cols-2 gap-3">
               <Select onChange={(e) => update("level", e.target.value)} defaultValue="">
                 <option value="" disabled>Level</option>
                 {levels.map((l) => <option key={l} value={l}>{l}</option>)}
@@ -113,14 +141,14 @@ export default function SignupPage() {
               <Select onChange={(e) => update("semester", e.target.value)} defaultValue={SEMESTERS[0]}>
                 {SEMESTERS.map((s) => <option key={s} value={s}>{s}</option>)}
               </Select>
-            </div>
-            <Select onChange={(e) => update("session", e.target.value)} defaultValue={SESSIONS[0]}>
+            </div>}
+            {!independent && <Select onChange={(e) => update("session", e.target.value)} defaultValue={SESSIONS[0]}>
               {SESSIONS.map((s) => <option key={s} value={s}>{s} Session</option>)}
-            </Select>
+            </Select>}
             <Input icon={<Mail className="w-4 h-4" />} type="email" placeholder="Email" onChange={(e) => update("email", e.target.value)} />
             <Input icon={<Lock className="w-4 h-4" />} type="password" placeholder="Password" onChange={(e) => update("password", e.target.value)} />
             {error && <p className="text-sm text-danger">{error}</p>}
-            <Button type="submit" disabled={loading} className="w-full">{loading ? "Creating account..." : "Sign Up"}</Button>
+            <Button type="submit" disabled={loading} className="w-full">{loading ? "Creating account..." : independent ? "Continue as independent learner" : "Sign Up"}</Button>
             <p className="text-center text-sm text-slate-500 dark:text-slate-400">Already have an account? <Link to="/login" className="text-primary font-medium">Log in</Link></p>
           </form>
         </div>

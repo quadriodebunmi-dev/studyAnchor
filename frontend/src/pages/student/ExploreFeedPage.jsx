@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, X, School } from "lucide-react";
+import { Search, X, School, FileText } from "lucide-react";
 import AppShell from "../AppShell.jsx";
 import { Select, Input, Field } from "../../components/FormFields.jsx";
 import SchoolPicker from "../../components/SchoolPicker.jsx";
@@ -16,6 +16,48 @@ import searchingIllustration from "../../../public/Searching-for-word.svg";
 import notFoundIllustration from "../../../public/404-Page-Animation.svg";
 
 const idOf = (v) => String(v?._id || v || "");
+
+// Level -> chip colour. Full class names on purpose: Tailwind can't see classes built from pieces.
+const LEVEL_CHIP = {
+  100: "bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300",
+  200: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+  300: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+  400: "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
+  500: "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+  600: "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+};
+const DEFAULT_LEVEL_CHIP = "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+
+// Defined at module level (not inside the page) so cards don't remount on every render.
+// Built to sit two across on a phone: code + material count on top, a two-line title,
+// the department, then small chips for level, session and any feed tags.
+function CourseCard({ c, scope, user, onOpen }) {
+  const other = scope === "mine" && user.level && (c.department !== user.department || c.level !== user.level);
+  const count = typeof c.materialCount === "number" ? c.materialCount : null;
+  const materials = count === null ? "" : `${count} material${count === 1 ? "" : "s"}`;
+  return (
+    <button onClick={() => onOpen(c)} className="lv-card-interactive flex h-full flex-col gap-1 p-2 text-left">
+      <div className="flex items-center justify-between gap-1">
+        <span className="truncate text-[10.5px] font-bold tracking-wide text-primary">{c.code}</span>
+        {count !== null && (
+          <span className="flex shrink-0 items-center gap-0.5 text-[10px] lv-meta" title={materials}>
+            <FileText className="h-3 w-3" aria-label={materials} />{count}
+          </span>
+        )}
+      </div>
+      <p className="line-clamp-2 text-xs font-semibold leading-snug">{c.title}</p>
+      <p className="truncate text-[10px] lv-meta">{c.department}</p>
+      <div className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
+        <span className={`rounded-full px-1.5 text-[9.5px] font-medium ${LEVEL_CHIP[c.level] || DEFAULT_LEVEL_CHIP}`}>{c.level} Level</span>
+        {c.session && <span className="rounded-full bg-slate-100 px-1.5 text-[9.5px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">{c.session}</span>}
+        <span className="contents [&>*]:!px-1.5 [&>*]:!py-0 [&>*]:!text-[9.5px]">
+          {other && <Badge tone="violet">Other</Badge>}
+          {c.feedReason && <Badge tone="slate">{c.feedReason}</Badge>}
+        </span>
+      </div>
+    </button>
+  );
+}
 
 export default function ExploreFeedPage() {
   const { user } = useAuth();
@@ -98,126 +140,119 @@ export default function ExploreFeedPage() {
 
   const setFilter = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }));
 
-  const CourseCard = ({ c }) => (
-    <button onClick={() => navigate(`/course/${c._id}`)} className="lv-card-interactive text-left p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-primary">{c.code}</p>
-        <div className="flex items-center gap-1.5">
-          {scope === "mine" && user.level && (c.department !== user.department || c.level !== user.level) && <Badge tone="violet">Other</Badge>}
-          {c.feedReason && <Badge tone="slate">{c.feedReason}</Badge>}
-        </div>
-      </div>
-      <p className="mt-0.5 font-semibold text-sm">{c.title}</p>
-      <p className="mt-1.5 text-xs lv-meta">
-        {c.department} · {c.level} Level{c.session && ` · ${c.session}`}
-        {typeof c.materialCount === "number" && ` · ${c.materialCount} material${c.materialCount === 1 ? "" : "s"}`}
-      </p>
-    </button>
-  );
+  const openCourse = (c) => navigate(`/course/${c._id}`);
+
+  // Shared label/select styling so all four filters stay compact.
+  const filterLabel = "text-[10.5px] font-medium lv-meta";
+  const filterSelect = "!py-1 !text-xs";
 
   return (
     <AppShell>
-      <h1 className="text-lg font-bold">Explore Feed</h1>
-      <p className="mt-1 text-xs lv-meta">
-        {scope === "mine"
-          ? "Browse other departments and levels at your school — read-only, doesn't affect your dashboard."
-          : pickedSchool
-            ? `Browsing ${pickedSchool.name} — read-only.`
-            : "Browsing courses from every school on Study Anchor — read-only."}
-      </p>
+      {/* Width cap keeps everything moderate on large screens. */}
+      <div className="mx-auto w-full max-w-4xl text-[13px]">
+        <h1 className="!text-base sm:!text-lg font-bold">Explore Feed</h1>
+        <p className="mt-0.5 text-[11px] lv-meta">
+          {scope === "mine"
+            ? "Browse other departments and levels at your school — read-only, doesn't affect your dashboard."
+            : pickedSchool
+              ? `Browsing ${pickedSchool.name} — read-only.`
+              : "Browsing courses from every school on Study Anchor — read-only."}
+        </p>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-xl border border-slate-200 p-1 dark:border-slate-700" role="group" aria-label="Which schools to show">
-          {[["mine", "My school"], ["all", "All schools"]].map(([value, label]) => (
-            <Button key={value} size="sm" variant={scope === value ? "primary" : "ghost"} aria-pressed={scope === value} onClick={() => changeScope(value)}>
-              {label}
-            </Button>
-          ))}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-xl border border-slate-200 p-0.5 dark:border-slate-700" role="group" aria-label="Which schools to show">
+            {[["mine", "My school"], ["all", "All schools"]].map(([value, label]) => (
+              <Button key={value} size="sm" variant={scope === value ? "primary" : "ghost"} className="!px-2.5 !py-1 !text-xs" aria-pressed={scope === value} onClick={() => changeScope(value)}>
+                {label}
+              </Button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {scope === "all" && (
-        <div className="mt-3 max-w-sm">
-          <Field label="Sorted by school">
-            <SchoolPicker key={pickerKey} value={pickedSchool} onSelect={setPickedSchool} />
-          </Field>
-          {pickedSchool && (
-            <button onClick={clearPickedSchool} className="mt-1.5 text-xs font-medium text-primary">
-              ← Browse all
-            </button>
+        {scope === "all" && (
+          <div className="mt-2.5 max-w-xs">
+            <Field label="Sorted by school">
+              <SchoolPicker key={pickerKey} value={pickedSchool} onSelect={setPickedSchool} />
+            </Field>
+            {pickedSchool && (
+              <button onClick={clearPickedSchool} className="mt-1 text-[11px] font-medium text-primary">
+                ← Browse all
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="mt-3 relative max-w-sm">
+          <Input icon={<Search className="w-3 h-3" />} className="!py-1.5 !text-xs" placeholder="Search by code, title or department..." value={query} onChange={(e) => setQuery(e.target.value)} />
+          {query && (
+            <button onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="w-3 h-3" /></button>
           )}
         </div>
-      )}
 
-      <div className="mt-4 relative max-w-md">
-        <Input icon={<Search className="w-3 h-3" />} placeholder="Search by code, title or department..." value={query} onChange={(e) => setQuery(e.target.value)} />
-        {query && (
-          <button onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="w-3 h-3" /></button>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="flex flex-col gap-0.5">
+            <label htmlFor="filter-department" className={filterLabel}>Department</label>
+            <Select id="filter-department" value={filters.department} onChange={setFilter("department")} className={filterSelect}>
+              <option>All</option>{departments.map((d) => <option key={d}>{d}</option>)}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label htmlFor="filter-level" className={filterLabel}>Level</label>
+            <Select id="filter-level" value={filters.level} onChange={setFilter("level")} className={filterSelect}>
+              <option>All</option>{levels.map((l) => <option key={l}>{l}</option>)}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label htmlFor="filter-semester" className={filterLabel}>Semester</label>
+            <Select id="filter-semester" value={filters.semester} onChange={setFilter("semester")} className={filterSelect}>
+              <option>All</option>{SEMESTERS.map((s) => <option key={s}>{s}</option>)}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label htmlFor="filter-session" className={filterLabel}>Session</label>
+            <Select id="filter-session" value={filters.session} onChange={setFilter("session")} className={filterSelect}>
+              <option>All</option>{SESSIONS.map((s) => <option key={s}>{s}</option>)}
+            </Select>
+          </div>
+        </div>
+
+        {error && !loading && (
+          <div className="mt-4 rounded-xl border border-danger/30 bg-danger/10 p-2.5 text-xs text-danger" role="alert">{error}</div>
+        )}
+
+        {loading ? (
+          <div className="mt-8 flex flex-col items-center gap-2 text-center">
+            <img src={searchingIllustration} alt="" aria-hidden="true" className="h-24 w-24" />
+            <p className="text-[11px] lv-meta">Searching for courses…</p>
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="mt-4 flex flex-col items-center gap-1 py-4 text-center">
+            {/* h-50/w-50 aren't default Tailwind classes, so use a real size */}
+            <img src={notFoundIllustration} alt="" aria-hidden="true" className="h-36 w-36" />
+            <h3 className="mt-1.5 font-display text-[13px] font-semibold text-night dark:text-slate-100">No courses match</h3>
+            <p className="max-w-xs text-[11px] lv-meta">Try a different keyword or adjust your filters.</p>
+          </div>
+        ) : groups ? (
+          <>
+            {groups.map((g, i) => (
+              <section key={`${g.key}-${i}`} className="mt-5">
+                <h2 className="lv-section-title mb-2 !text-[13px] flex items-center gap-1.5">
+                  <School className="h-3 w-3" /> {g.school?.name || "Unassigned"}
+                  {g.key === idOf(user.schoolId) && <Badge tone="accent">Your school</Badge>}
+                  {g.school && !g.school.verified && <Badge tone="amber">Unverified</Badge>}
+                </h2>
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">{g.courses.map((c) => <CourseCard key={c._id} c={c} scope={scope} user={user} onOpen={openCourse} />)}</div>
+              </section>
+            ))}
+            <InfiniteScrollSentinel sentinelRef={sentinelRef} hasMore={hasMore} loadingMore={loadingMore} />
+          </>
+        ) : (
+          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-3">
+            {courses.map((c) => <CourseCard key={c._id} c={c} scope={scope} user={user} onOpen={openCourse} />)}
+            <div className="col-span-full"><InfiniteScrollSentinel sentinelRef={sentinelRef} hasMore={hasMore} loadingMore={loadingMore} /></div>
+          </div>
         )}
       </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <div className="flex flex-col gap-0.5">
-          <label htmlFor="filter-department" className="text-xs font-medium lv-meta">Department</label>
-          <Select id="filter-department" value={filters.department} onChange={setFilter("department")} className="text-xs">
-            <option>All</option>{departments.map((d) => <option key={d}>{d}</option>)}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <label htmlFor="filter-level" className="text-xs font-medium lv-meta">Level</label>
-          <Select id="filter-level" value={filters.level} onChange={setFilter("level")} className="text-xs">
-            <option>All</option>{levels.map((l) => <option key={l}>{l}</option>)}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <label htmlFor="filter-semester" className="text-xs font-medium lv-meta">Semester</label>
-          <Select id="filter-semester" value={filters.semester} onChange={setFilter("semester")} className="text-xs">
-            <option>All</option>{SEMESTERS.map((s) => <option key={s}>{s}</option>)}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <label htmlFor="filter-session" className="text-xs font-medium lv-meta">Session</label>
-          <Select id="filter-session" value={filters.session} onChange={setFilter("session")} className="text-xs">
-            <option>All</option>{SESSIONS.map((s) => <option key={s}>{s}</option>)}
-          </Select>
-        </div>
-      </div>
-
-      {error && !loading && (
-        <div className="mt-6 rounded-2xl border border-danger/30 bg-danger/10 p-3 text-xs text-danger" role="alert">{error}</div>
-      )}
-
-      {loading ? (
-        <div className="mt-10 flex flex-col items-center gap-3 text-center">
-          <img src={searchingIllustration} alt="" aria-hidden="true" className="h-32 w-32" />
-          <p className="text-xs lv-meta">Searching for courses…</p>
-        </div>
-      ) : courses.length === 0 ? (
-        <div className="mt-6 flex flex-col items-center gap-1 py-6 text-center">
-          <img src={notFoundIllustration} alt="" aria-hidden="true" className="h-50 w-50" />
-          <h3 className="mt-2 font-display text-sm font-semibold text-night dark:text-slate-100">No courses match</h3>
-          <p className="max-w-sm text-xs lv-meta">Try a different keyword or adjust your filters.</p>
-        </div>
-      ) : groups ? (
-        <>
-          {groups.map((g, i) => (
-            <section key={`${g.key}-${i}`} className="mt-8">
-              <h2 className="lv-section-title mb-3 text-sm flex items-center gap-1.5">
-                <School className="h-3.5 w-3.5" /> {g.school?.name || "Unassigned"} 
-                {g.key === idOf(user.schoolId) && <Badge tone="accent">Your school</Badge>}
-                {g.school && !g.school.verified && <Badge tone="amber">Unverified</Badge>}
-              </h2>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{g.courses.map((c) => <CourseCard key={c._id} c={c} />)}</div>
-            </section>
-          ))}
-          <InfiniteScrollSentinel sentinelRef={sentinelRef} hasMore={hasMore} loadingMore={loadingMore} />
-        </>
-      ) : (
-        <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courses.map((c) => <CourseCard key={c._id} c={c} />)}
-          <InfiniteScrollSentinel sentinelRef={sentinelRef} hasMore={hasMore} loadingMore={loadingMore} />
-        </div>
-      )}
     </AppShell>
   );
 }

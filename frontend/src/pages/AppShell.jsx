@@ -7,6 +7,7 @@ import MaterialCard from "../components/MaterialCard.jsx";
 import EmptyState from "../components/EmptyState.jsx";
 import { CardSkeleton } from "../components/Loader.jsx";
 import PwaPrompts, { OfflineBanner } from "../components/PwaPrompts.jsx";
+import AnnouncementBanner from "../components/AnnouncementBanner.jsx";
 import Pager from "../components/Pager.jsx";
 import { Search } from "lucide-react";
 import { searchMaterials, getPendingMaterials } from "../services/materialService.js";
@@ -64,16 +65,17 @@ export default function AppShell({ sidebarItems: itemsProp, children }) {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <OfflineBanner />
       <Navbar search={search} setSearch={setSearch} />
+      <AnnouncementBanner />
 
       <div className="mx-auto flex max-w-7xl">
         {sidebarItems && <Sidebar items={sidebarItems} />}
-        <main className="min-w-0 flex-1 px-4 pb-28 pt-6 sm:px-6 lg:pb-10">
+        <main className="min-w-0 flex-1 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6 lg:pb-10">
           {search.trim() ? (
             <div className="animate-rise-in">
               <p className="mb-4 text-sm lv-meta">
                 {loading ? "Searching..." : `${resultsPagination?.total ?? results?.length ?? 0} result(s) for "${search}"`}
               </p>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2.5 sm:grid-cols-2">
                 {loading ? (
                   <CardSkeleton count={4} />
                 ) : (

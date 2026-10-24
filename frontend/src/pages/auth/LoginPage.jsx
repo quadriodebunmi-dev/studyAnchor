@@ -5,6 +5,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import ThemeToggle from "../../components/ThemeToggle.jsx";
 import BrandMark from "../../components/BrandMark.jsx";
 import { InstallPrompt } from "../../components/PwaPrompts.jsx";
+import InstallButton from "../../components/InstallButton.jsx";
 import Button from "../../components/Button.jsx";
 import { Input } from "../../components/FormFields.jsx";
 import { login, googleLogin } from "../../services/authService.js";
@@ -186,6 +187,8 @@ export default function LoginPage() {
     <GoogleIcon className="h-4 w-4" /> Continue with Google
   </Button>
 )}
+
+            <InstallButton variant="outline" label="Install Study Anchor app" className="w-full" />
 
             <div className="flex items-center justify-between pt-2 text-sm">
               <Link to="/signup" className="font-medium text-primary hover:underline">Sign up as a student</Link>

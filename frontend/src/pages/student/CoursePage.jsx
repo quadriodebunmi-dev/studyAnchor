@@ -17,6 +17,8 @@ export default function CoursePage() {
   const [course, setCourse] = useState(null);
   const [materials, setMaterials] = useState(null);
   const [pagination, setPagination] = useState(null);
+  // true when this course belongs to another school: its card is browsable, its materials aren't.
+  const [restricted, setRestricted] = useState(false);
   const [sort, setSort] = useState("date");
   const [page, setPage] = useState(1);
   const [downloadingAll, setDownloadingAll] = useState(false);
@@ -32,6 +34,7 @@ export default function CoursePage() {
       setCourse(data.course);
       setMaterials(data.materials);
       setPagination(data.pagination);
+      setRestricted(Boolean(data.restricted));
     });
   }, [id, sort, page]);
 
@@ -53,32 +56,34 @@ export default function CoursePage() {
 
   return (
     <AppShell>
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-xs mb-3 text-slate-500 dark:text-slate-400"><ArrowLeft className="w-3.5 h-3.5" /> Back</button>
+      <button onClick={() => navigate(-1)} className="mb-2 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"><ArrowLeft className="w-3.5 h-3.5" /> Back</button>
       <div className="flex flex-wrap items-start justify-between gap-2.5">
         <div>
-          <p className="text-[11px] font-semibold text-primary">{course.code}</p>
-          <h1 className="text-lg font-bold">{course.title}</h1>
+          <p className="font-display text-xs font-bold tracking-wide text-primary">{course.code}</p>
+          <h1 className="lv-page-title">{course.title}</h1>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{course.department} · {course.level} Level · {course.semester}{course.session && ` · ${course.session} Session`}</p>
         </div>
-        <Button variant="outline" className="text-sm" disabled={downloadingAll} onClick={handleDownloadAll}>
+        <Button size="sm" variant="outline" disabled={downloadingAll} onClick={handleDownloadAll}>
           <DownloadCloud className="w-3.5 h-3.5" /> {downloadingAll ? "Preparing zip..." : "Download all"}
         </Button>
       </div>
       <div className="mt-3 flex justify-end">
-        <Select className="text-sm" value={sort} onChange={(e) => setSort(e.target.value)}>
+        <Select className="w-auto py-1.5 text-xs" aria-label="Sort materials" value={sort} onChange={(e) => setSort(e.target.value)}>
           <option value="date">Sort by date</option>
           <option value="downloads">Sort by most downloaded</option>
         </Select>
       </div>
       {!materials ? (
-        <div className="mt-3 grid sm:grid-cols-2 gap-3"><CardSkeleton count={4} /></div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2"><CardSkeleton count={4} /></div>
       ) : (
         <>
-          <div className="mt-3 grid sm:grid-cols-2 gap-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {materials.map((m) => (
               <MaterialCard key={m._id} material={m} onOpen={() => navigate(`/material/${m._id}`)} />
             ))}
-            {materials.length === 0 && <EmptyState icon={<FileText className="w-6 h-6" />} title="No materials yet" message="Nothing has been uploaded for this course." />}
+            {materials.length === 0 && (restricted
+              ? <EmptyState icon={<FileText className="w-6 h-6" />} title="Materials are private to this school" message="You can browse this course, but its study materials are only visible to students of the school it belongs to." />
+              : <EmptyState icon={<FileText className="w-6 h-6" />} title="No materials yet" message="Nothing has been uploaded for this course." />)}
           </div>
           <Pager pagination={pagination} onPageChange={setPage} />
         </>

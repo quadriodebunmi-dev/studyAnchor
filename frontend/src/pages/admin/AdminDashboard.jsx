@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { LayoutDashboard, UserCheck, Users, FileText, FolderKanban, Flag, History, ClipboardCheck, Building2 } from "lucide-react";
+import { LayoutDashboard, UserCheck, Users, FileText, FolderKanban, Flag, History, ClipboardCheck, Building2, Gauge, ShieldAlert, Megaphone, CreditCard, Wallet, Settings, ScrollText, Layers } from "lucide-react";
 import AppShell from "../AppShell.jsx";
 import { InlineLoader } from "../../components/Loader.jsx";
 import { getPlatformAnalytics, listPendingReps, listPendingMaterials } from "../../services/adminService.js";
@@ -19,8 +19,16 @@ export function useAdminNavItems() {
     { to: "/admin/materials", label: "All Materials", icon: <FileText className="w-4 h-4" /> },
     { to: "/admin/courses", label: "All Courses", icon: <FolderKanban className="w-4 h-4" /> },
     { to: "/admin/schools", label: "Schools", icon: <Building2 className="w-4 h-4" /> },
+    { to: "/admin/departments", label: "Departments", icon: <Layers className="w-4 h-4" /> },
     { to: "/admin/reports", label: "Reports", icon: <Flag className="w-4 h-4" /> },
     { to: "/admin/log", label: "Activity Log", icon: <History className="w-4 h-4" /> },
+    { to: "/admin/metrics", label: "Platform health", icon: <Gauge className="w-4 h-4" /> },
+    { to: "/admin/moderation", label: "Moderation", icon: <ShieldAlert className="w-4 h-4" /> },
+    { to: "/admin/announcements", label: "Announcements", icon: <Megaphone className="w-4 h-4" /> },
+    { to: "/admin/subscriptions", label: "Subscriptions", icon: <CreditCard className="w-4 h-4" /> },
+    { to: "/admin/payments", label: "Payments", icon: <Wallet className="w-4 h-4" /> },
+    { to: "/admin/settings", label: "Settings", icon: <Settings className="w-4 h-4" /> },
+    { to: "/admin/audit", label: "Audit log", icon: <ScrollText className="w-4 h-4" /> },
   ];
 }
 

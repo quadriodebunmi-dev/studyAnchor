@@ -1,16 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Bot, Send, Trash2, X, Copy, Check, RotateCw, FileText } from "lucide-react";
+import { Bot, Send, Square, Trash2, X, Copy, Check, RotateCw, FileText, Paperclip } from "lucide-react";
 import AppShell from "../AppShell.jsx";
 import Button from "../../components/Button.jsx";
 import ChatMarkdown from "../../components/ChatMarkdown.jsx";
+import Modal from "../../components/Modal.jsx";
+import MaterialPicker from "../../components/MaterialPicker.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../components/Toast.jsx";
-import { sendChatMessage } from "../../services/assistantService.js";
+import { streamChatMessage } from "../../services/assistantService.js";
 import { getMaterial } from "../../services/materialService.js";
 
 const MAX_INPUT = 2000;
 const MAX_STORED = 40;
+
+// How the assistant teaches. Sent with every message; the server validates it.
+const MODES = [
+  { id: "tutor", label: "Tutor", hint: "Step-by-step explanations" },
+  { id: "simple", label: "Explain simply", hint: "Plain words and analogies" },
+  { id: "quiz", label: "Quiz me", hint: "One question at a time" },
+  { id: "exam", label: "Exam coach", hint: "Answers that score marks" },
+];
 
 const GENERAL_PROMPTS = [
   "Explain a concept I'm stuck on",
@@ -55,17 +65,29 @@ export default function AssistantPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [material, setMaterial] = useState(null);
+  const [picking, setPicking] = useState(false);
+  const modeKey = `lv-assistant-mode:${user._id}`;
+  const [mode, setModeState] = useState(() => { try { const m = localStorage.getItem(modeKey); return MODES.some((x) => x.id === m) ? m : "tutor"; } catch { return "tutor"; } });
+  const setMode = (m) => { setModeState(m); try { localStorage.setItem(modeKey, m); } catch { /* ignore */ } };
   const bottomRef = useRef(null);
+  const abortRef = useRef(null);
+  const historyRef = useRef([]); // the thread the current/last request was made with (for Retry)
+
+  // Leaving the page cancels a reply that's still being written.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   // Switching between general chat and a material: load that thread.
   useEffect(() => {
+    abortRef.current?.abort();
+    abortRef.current = null; // so the cancelled request can't write into the thread we're switching to
     try { setMessages(JSON.parse(localStorage.getItem(storeKey)) || []); } catch { setMessages([]); }
-    setError("");
+    setError(""); setLoading(false);
   }, [storeKey]);
 
   useEffect(() => {
+    if (loading) return; // save once a reply is finished, not on every streamed piece
     try { localStorage.setItem(storeKey, JSON.stringify(messages.slice(-MAX_STORED))); } catch { /* storage full/blocked */ }
-  }, [messages, storeKey]);
+  }, [messages, storeKey, loading]);
 
   useEffect(() => {
     setMaterial(null);
@@ -76,18 +98,40 @@ export default function AssistantPage() {
     });
   }, [materialId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, loading]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: loading ? "auto" : "smooth", block: "end" }); }, [messages, loading]);
 
+  // Streams the reply into a new assistant message, piece by piece.
   async function run(history) {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    historyRef.current = history;
     setLoading(true); setError("");
+    setMessages([...history, { role: "assistant", content: "" }]);
+    let got = "";
     try {
-      const reply = await sendChatMessage(history, materialId || undefined);
-      setMessages([...history, { role: "assistant", content: reply }]);
+      await streamChatMessage({
+        messages: history, materialId: materialId || undefined, mode, signal: ctrl.signal,
+        onDelta: (d) => { got += d; setMessages([...history, { role: "assistant", content: got }]); },
+      });
     } catch (err) {
-      setError(err.message || "The assistant couldn't respond. Please try again.");
+      if (err?.name !== "AbortError") setError(err.message || "The assistant couldn't respond. Please try again.");
     } finally {
-      setLoading(false);
+      if (abortRef.current === ctrl) {
+        // Keep whatever arrived (a reply cut short by Stop is still useful); drop an empty bubble.
+        setMessages(got.trim() ? [...history, { role: "assistant", content: got }] : history);
+        setLoading(false);
+      }
     }
+  }
+
+  function stop() { abortRef.current?.abort(); }
+
+  function regenerate() {
+    if (loading) return;
+    const last = messages.length - 1;
+    if (last < 1 || messages[last].role !== "assistant") return;
+    run(messages.slice(0, last));
   }
 
   function send(text) {
@@ -113,9 +157,21 @@ export default function AssistantPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold"><Bot className="h-6 w-6 text-primary" /> AI Assistant</h1>
           <p className="mt-1 text-sm lv-meta">Ask questions about your courses, get concepts explained, or plan your revision.</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={clearChat} disabled={!messages.length && !error}>
-          <Trash2 className="h-4 w-4" /> New chat
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setPicking(true)}><Paperclip className="h-4 w-4" /> {materialId ? "Change material" : "Chat about a material"}</Button>
+          <Button variant="ghost" size="sm" onClick={clearChat} disabled={!messages.length && !error}>
+            <Trash2 className="h-4 w-4" /> New chat
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-1.5" role="radiogroup" aria-label="How should the assistant help?">
+        {MODES.map((m) => (
+          <button
+            key={m.id} role="radio" aria-checked={mode === m.id} title={m.hint} onClick={() => setMode(m.id)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${mode === m.id ? "bg-primary text-primary-fg" : "border border-slate-200 hover:border-accent dark:border-slate-700"}`}
+          >{m.label}</button>
+        ))}
       </div>
 
       {materialId && (
@@ -149,15 +205,29 @@ export default function AssistantPage() {
             </div>
           )}
 
-          {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[88%] rounded-2xl px-4 py-2.5 ${m.role === "user" ? "bg-primary text-primary-fg" : "border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60"}`}>
-                {m.role === "user" ? <p className="whitespace-pre-wrap text-sm">{m.content}</p> : (<><ChatMarkdown text={m.content} /><CopyBtn text={m.content} /></>)}
+          {messages.map((m, i) => {
+            const isLast = i === messages.length - 1;
+            if (m.role === "assistant" && !m.content) return null; // shown as typing dots below
+            return (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[88%] rounded-2xl px-4 py-2.5 ${m.role === "user" ? "bg-primary text-primary-fg" : "border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60"}`}>
+                  {m.role === "user" ? <p className="whitespace-pre-wrap text-sm">{m.content}</p> : (
+                    <>
+                      <ChatMarkdown text={m.content} />
+                      {loading && isLast ? <span className="mt-1 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-slate-400 align-middle" aria-hidden="true" /> : (
+                        <div className="flex items-center gap-3">
+                          <CopyBtn text={m.content} />
+                          {isLast && <button onClick={regenerate} className="mt-2 inline-flex items-center gap-1 text-xs lv-meta hover:text-primary" aria-label="Regenerate answer"><RotateCw className="h-3 w-3" /> Regenerate</button>}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
-          {loading && (
+          {loading && !messages[messages.length - 1]?.content && (
             <div className="flex justify-start">
               <div className="flex gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60" role="status" aria-label="Assistant is typing">
                 {[0, 1, 2].map((d) => <span key={d} className="h-2 w-2 animate-pulse rounded-full bg-slate-400" style={{ animationDelay: `${d * 150}ms` }} />)}
@@ -168,7 +238,7 @@ export default function AssistantPage() {
           {error && (
             <div className="flex items-center justify-between gap-3 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
               <span>{error}</span>
-              <button onClick={() => run(messages)} className="inline-flex shrink-0 items-center gap-1 font-medium hover:underline"><RotateCw className="h-3.5 w-3.5" /> Retry</button>
+              <button onClick={() => run(historyRef.current.length ? historyRef.current : messages)} className="inline-flex shrink-0 items-center gap-1 font-medium hover:underline"><RotateCw className="h-3.5 w-3.5" /> Retry</button>
             </div>
           )}
           <div ref={bottomRef} />
@@ -181,13 +251,26 @@ export default function AssistantPage() {
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             maxLength={MAX_INPUT}
             rows={1}
-            placeholder={materialId ? "Ask about this material…" : "Ask anything about your studies…"}
+            placeholder={mode === "quiz" ? "Name a topic, or answer the question above…" : mode === "exam" ? "Paste an exam question or your draft answer…" : materialId ? "Ask about this material…" : "Ask anything about your studies…"}
             aria-label="Message the AI assistant"
             className="max-h-32 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-night outline-none focus:border-accent focus:ring-2 focus:ring-accent/40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
-          <Button type="submit" variant="accent" disabled={loading || !input.trim()} aria-label="Send message"><Send className="h-4 w-4" /></Button>
+          {loading
+            ? <Button type="button" variant="outline" onClick={stop} aria-label="Stop generating"><Square className="h-4 w-4" /></Button>
+            : <Button type="submit" variant="accent" disabled={!input.trim()} aria-label="Send message"><Send className="h-4 w-4" /></Button>}
         </form>
       </div>
+
+      {picking && (
+        <Modal title="Chat about a material" onClose={() => setPicking(false)} wide>
+          <p className="mb-3 text-sm lv-meta">Pick one of your files or a course material. The assistant will answer using the parts of it that match your question.</p>
+          <MaterialPicker
+            selected={materialId ? [{ _id: materialId, title: material?.title || "" }] : []}
+            max={1}
+            onChange={(sel) => { setPicking(false); navigate(sel[0] ? `/assistant?material=${sel[0]._id}` : "/assistant"); }}
+          />
+        </Modal>
+      )}
     </AppShell>
   );
 }

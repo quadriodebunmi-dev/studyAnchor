@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import AppShell from "../AppShell.jsx";
 import { useAdminNavItems } from "./AdminDashboard.jsx";
 import Badge from "../../components/Badge.jsx";
@@ -42,7 +43,7 @@ export default function AdminUsersPage() {
           <tbody>
             {users.map((u) => (
               <tr key={u._id} className="border-t border-slate-200 dark:border-slate-800">
-                <td className="px-4 py-3">{u.name}</td>
+                <td className="px-4 py-3"><Link to={`/admin/users/${u._id}`} className="text-primary hover:underline">{u.name}</Link></td>
                 <td className="px-4 py-3 capitalize text-slate-500 dark:text-slate-400">{u.role}</td>
                 <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{u.department || "—"}</td>
                 <td className="px-4 py-3">{u.suspended ? <Badge tone="red">Suspended</Badge> : <Badge tone="green">Active</Badge>}</td>

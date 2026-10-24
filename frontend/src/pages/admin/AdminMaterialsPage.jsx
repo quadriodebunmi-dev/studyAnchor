@@ -38,7 +38,7 @@ export default function AdminMaterialsPage() {
               <p className="font-semibold">{m.title} <span className="text-xs font-normal text-slate-400">({fileTypeLabel(m.fileType)})</span></p>
               <button onClick={() => handleRemove(m._id)}><Trash2 className="w-4 h-4 text-danger" /></button>
             </div>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">By {m.uploadedBy?.name} · {m.courseId?.code} · {m.downloads} downloads</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">By {m.uploadedBy?.name} · {m.courseId?.code || "Personal (no course)"} · {m.downloads} downloads</p>
           </div>
         ))}
       </div>
