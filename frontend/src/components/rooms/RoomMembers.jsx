@@ -6,6 +6,9 @@ import { Input } from "../FormFields.jsx";
 import { InlineLoader } from "../Loader.jsx";
 import { useToast } from "../Toast.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import Avatar from "../Avatar.jsx";
+import useRoomPresence from "../../hooks/useRoomPresence.js";
+import AvatarModal from "./AvatarModal.jsx";
 import { decideRequest, inviteToRoom, listMembers, listRequests, removeMember, setMemberRole } from "../../services/roomService.js";
 
 export default function RoomMembers({ room }) {
@@ -16,6 +19,8 @@ export default function RoomMembers({ room }) {
   const [members, setMembers] = useState(null);
   const [requests, setRequests] = useState([]);
   const [email, setEmail] = useState("");
+  const [avatarView, setAvatarView] = useState(null);
+  const { online } = useRoomPresence(room._id, user._id);
 
   const load = useCallback(() => {
     listMembers(room._id, { limit: 100 }).then((r) => setMembers(r.members)).catch(() => setMembers([]));
@@ -35,6 +40,7 @@ export default function RoomMembers({ room }) {
 
   return (
     <div className="space-y-6">
+      {avatarView && <AvatarModal person={avatarView} onClose={() => setAvatarView(null)} />}
       {canModerate && (
         <>
           {requests.length > 0 && (
@@ -67,6 +73,10 @@ export default function RoomMembers({ room }) {
             return (
               <li key={m.user._id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <span className="flex items-center gap-2 text-sm font-medium">
+                  <button type="button" onClick={() => setAvatarView({ name: m.user.name, avatarUrl: m.user.avatarUrl, online: self || online.has(m.user._id) })} aria-label={`View ${m.user.name}'s profile picture`} className="relative inline-flex rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                    <Avatar user={m.user} size={28} />
+                    {(self || online.has(m.user._id)) && <span title="Online" className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />}
+                  </button>
                   {m.user.name}{self && <span className="lv-meta">(you)</span>}
                   {m.role === "owner" && <Badge tone="accent">Owner</Badge>}
                   {m.role === "moderator" && <Badge tone="green">Moderator</Badge>}

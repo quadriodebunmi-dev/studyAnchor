@@ -4,6 +4,7 @@ import { Search, LogOut, X, Moon, Sun, UserCircle2 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle.jsx";
 import InstallButton from "./InstallButton.jsx";
 import NotificationBell from "./NotificationBell.jsx";
+import PlanBadge from "./PlanBadge.jsx";
 import { closeSocket } from "../services/realtime.js";
 import BrandMark from "./BrandMark.jsx";
 import Avatar from "./Avatar.jsx";
@@ -70,20 +71,7 @@ export default function Navbar({ search, setSearch }) {
           </span>
         </Link>
 
-        {setSearch && (
-          <div className="relative mx-auto hidden w-full max-w-xl sm:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search every course and material"
-              aria-label="Search materials"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none transition-colors
-                placeholder-slate-400 focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent/40
-                dark:border-slate-800 dark:bg-slate-800 dark:focus:bg-slate-800"
-            />
-          </div>
-        )}
+
 
         {/* One action cluster so the notification bell (which polls and holds a
             socket subscription) is only mounted once. Phone: search, bell,
@@ -92,16 +80,9 @@ export default function Navbar({ search, setSearch }) {
           <span className="hidden sm:inline-flex"><InstallButton variant="navLight" label="Install" iconOnlyOnMobile /></span>
           <span className="hidden sm:inline-flex"><ThemeToggle /></span>
 
-          {setSearch && (
-            <button
-              onClick={() => setSearchOpen((o) => !o)}
-              aria-label={searchOpen ? "Close search" : "Search materials"}
-              className="grid h-9 w-9 place-items-center rounded-full text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 sm:hidden"
-            >
-              {searchOpen ? <X className="h-[18px] w-[18px]" /> : <Search className="h-[18px] w-[18px]" />}
-            </button>
-          )}
+     
 
+          {user && user.role !== "admin" && <PlanBadge />}
           {user && user.role !== "admin" && <NotificationBell />}
 
           {user && (

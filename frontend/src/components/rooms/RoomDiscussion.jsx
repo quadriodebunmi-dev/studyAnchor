@@ -10,6 +10,8 @@ import { createPost, editPost, listPosts, listReplies, removePost, reportPost } 
 import { subscribe, isSocketConnected } from "../../services/realtime.js";
 import { prepareImage } from "../../utils/image.js";
 import useVoiceRecorder, { voiceSupported } from "../../hooks/useVoiceRecorder.js";
+import useRoomPresence from "../../hooks/useRoomPresence.js";
+import AvatarModal from "./AvatarModal.jsx";
 
 const clock = (d) => new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const dayKey = (d) => new Date(d).toDateString();
@@ -30,12 +32,21 @@ const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padSt
 const previewText = (p) => p.content || (p.attachment?.kind === "audio" ? "Voice message" : p.attachment?.kind === "image" ? "Photo" : "");
 
 // Profile picture (User.avatarUrl) with an initials fallback when there's none or it fails to load.
-function Avatar({ name, url }) {
+// A green dot marks people who are online in the room right now.
+function Avatar({ name, url, online }) {
   const [failed, setFailed] = useState(false);
-  if (url && /^https?:\/\//.test(url) && !failed) {
-    return <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} className="h-6 w-6 rounded-full object-cover" />;
-  }
-  return <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-[9.5px] font-semibold text-primary">{initials(name)}</span>;
+  useEffect(() => setFailed(false), [url]);
+  const showImg = url && /^https?:\/\//.test(url) && !failed;
+  return (
+    <span className="relative inline-block h-6 w-6">
+      {showImg ? (
+        <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-6 w-6 rounded-full bg-slate-200 object-cover dark:bg-slate-700" />
+      ) : (
+        <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-[9.5px] font-semibold text-primary">{initials(name)}</span>
+      )}
+      {online && <span title="Online" className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-slate-100 dark:ring-slate-950" />}
+    </span>
+  );
 }
 
 function Attachment({ a, onImage }) {
@@ -95,17 +106,23 @@ function ImageLightbox({ src, onClose, toast }) {
 
 // Defined at module level (not inside RoomDiscussion): a component created during render
 // would remount on every keystroke and cut off a playing voice message.
-function Msg({ p, nested, first, me, canModerate, onReply, onEdit, onRemove, onReport, onImage }) {
+function Msg({ p, nested, first, me, online, onAvatar, canModerate, onReply, onEdit, onRemove, onReport, onImage }) {
   const [menu, setMenu] = useState(false);
   const mine = !!p.mine;
   const showName = !mine && (first || nested);
   const act = (fn) => () => { setMenu(false); fn(p); };
   const name = p.author?.name || (mine ? me?.name : "") || "";
   const avatarUrl = p.author?.avatarUrl || (mine ? me?.avatarUrl : "") || "";
+  const authorId = p.author?._id || (mine ? me?._id : "");
+  const isOnline = mine ? true : Boolean(authorId && online?.has(authorId));
 
   return (
     <div className={`flex items-start gap-1.5 ${mine ? "flex-row-reverse" : ""} ${first ? "mt-2" : "mt-0.5"}`}>
-      <div className="w-6 shrink-0">{first && <Avatar name={name} url={avatarUrl} />}</div>
+      <div className="w-6 shrink-0">{first && (
+        <button type="button" onClick={() => onAvatar?.({ name, avatarUrl, online: isOnline })} aria-label={`View ${name || "member"}'s profile picture`} className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+          <Avatar name={name} url={avatarUrl} online={isOnline} />
+        </button>
+      )}</div>
       <div
         className={`relative max-w-[78%] rounded-2xl px-2.5 py-1 shadow-sm sm:max-w-[68%] ${
           mine ? "bg-primary/15 dark:bg-primary/30" : "bg-white dark:bg-slate-800"
@@ -159,6 +176,7 @@ export default function RoomDiscussion({ room }) {
   const [replies, setReplies] = useState({}); // postId -> array | undefined
   const [expanded, setExpanded] = useState(false);
   const [lightbox, setLightbox] = useState(null); // image url being viewed
+  const [avatarView, setAvatarView] = useState(null); // { name, avatarUrl, online } of the member whose picture is open
   const scrollRef = useRef(null);
   const stickRef = useRef(true); // keep the view pinned to the newest message unless the reader scrolled up
   const keepHeightRef = useRef(null); // set while loading older messages so the view doesn't jump
@@ -167,6 +185,9 @@ export default function RoomDiscussion({ room }) {
   const audioRef = useRef(null);
   const [attachment, setAttachment] = useState(null); // { file, kind: "image"|"audio", url, duration? }
   const [preparing, setPreparing] = useState(false);
+  const { online, typing, setTyping } = useRoomPresence(room._id, user?._id);
+  const typingTimer = useRef(null);
+  const onlineCount = online.size;
 
   const load = useCallback(async () => {
     const r = await listPosts(room._id, { limit: 20 });
@@ -218,6 +239,16 @@ export default function RoomDiscussion({ room }) {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, [expanded]);
+
+  // Typing signal: on while there's text, off after a short pause, on send/blur, or when leaving.
+  function handleTextChange(value) {
+    setText(value);
+    clearTimeout(typingTimer.current);
+    if (!value.trim()) return setTyping(false);
+    setTyping(true);
+    typingTimer.current = setTimeout(() => setTyping(false), 3000);
+  }
+  useEffect(() => () => { clearTimeout(typingTimer.current); setTyping(false); }, [setTyping]);
 
   // Oldest at the top, newest at the bottom, like a normal chat.
   const ordered = useMemo(() => (posts ? [...posts].reverse() : []), [posts]);
@@ -275,6 +306,8 @@ export default function RoomDiscussion({ room }) {
     e.preventDefault();
     if ((!text.trim() && !attachment) || sending || voice.recording) return;
     setSending(true);
+    clearTimeout(typingTimer.current);
+    setTyping(false);
     try {
       const post = await createPost(room._id, text, replyTo?._id, attachment?.file, attachment?.duration);
       stickRef.current = true; // jump to your own message
@@ -331,7 +364,7 @@ export default function RoomDiscussion({ room }) {
     catch (err) { toast(err.message || "Couldn't report.", "error"); }
   }
 
-  const msgProps = { me: user, canModerate, onReply: setReplyTo, onEdit: (p) => setEditing({ _id: p._id, content: p.content }), onRemove: remove, onReport: setReporting, onImage: setLightbox };
+  const msgProps = { me: user, online, onAvatar: setAvatarView, canModerate, onReply: setReplyTo, onEdit: (p) => setEditing({ _id: p._id, content: p.content }), onRemove: remove, onReport: setReporting, onImage: setLightbox };
   const iconBtn = "grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800";
   const canSend = !(sending || preparing || voice.recording || (!text.trim() && !attachment));
 
@@ -348,7 +381,15 @@ export default function RoomDiscussion({ room }) {
         <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900">
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold leading-tight">{room.name}</p>
-            {typeof room.memberCount === "number" && <p className="text-[10.5px] lv-meta">{room.memberCount} member{room.memberCount === 1 ? "" : "s"}</p>}
+            <p className="flex items-center gap-1.5 text-[10.5px] lv-meta">
+              {typeof room.memberCount === "number" && <span>{room.memberCount} member{room.memberCount === 1 ? "" : "s"}</span>}
+              {onlineCount > 0 && (
+                <span className="inline-flex items-center gap-1" aria-live="polite">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                  {onlineCount} online
+                </span>
+              )}
+            </p>
           </div>
           <button type="button" onClick={() => setExpanded((v) => !v)} aria-label={expanded ? "Collapse discussion" : "Expand discussion"} title={expanded ? "Collapse" : "Expand"} className={iconBtn}>
             {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -396,8 +437,20 @@ export default function RoomDiscussion({ room }) {
           </div>
         </div>
 
+        {/* Typing indicator (fixed height so the chat doesn't jump when it appears) */}
+        <div className="h-5 shrink-0 border-t border-slate-200 bg-white px-3 text-[11px] italic lv-meta dark:border-slate-800 dark:bg-slate-900" aria-live="polite">
+          {typing.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex gap-0.5" aria-hidden="true">
+                {[0, 150, 300].map((d) => <span key={d} className="h-1 w-1 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${d}ms` }} />)}
+              </span>
+              {typing.length === 1 ? `${typing[0]} is typing…` : typing.length === 2 ? `${typing[0]} and ${typing[1]} are typing…` : `${typing.length} people are typing…`}
+            </span>
+          )}
+        </div>
+
         {/* Composer */}
-        <form onSubmit={send} className="border-t border-slate-200 bg-white px-2 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+        <form onSubmit={send} className="bg-white px-2 pb-1.5 pt-0.5 dark:border-slate-800 dark:bg-slate-900">
           <div className={expanded ? "mx-auto w-full max-w-3xl" : ""}>
             {replyTo && (
               <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border-l-4 border-primary bg-slate-100 px-2.5 py-1 text-[11px] dark:bg-slate-800">
@@ -431,7 +484,8 @@ export default function RoomDiscussion({ room }) {
                 <textarea
                   ref={taRef}
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
+                  onChange={(e) => handleTextChange(e.target.value)}
+                  onBlur={() => { clearTimeout(typingTimer.current); setTyping(false); }}
                   onKeyDown={onKeyDown}
                   maxLength={2000}
                   rows={1}
@@ -453,6 +507,7 @@ export default function RoomDiscussion({ room }) {
         </form>
       </div>
 
+      {avatarView && <AvatarModal person={avatarView} onClose={() => setAvatarView(null)} />}
       {lightbox && <ImageLightbox src={lightbox} onClose={() => setLightbox(null)} toast={toast} />}
 
       {editing && (
