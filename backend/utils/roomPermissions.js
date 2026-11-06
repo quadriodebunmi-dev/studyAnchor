@@ -16,10 +16,26 @@ export const can = {
   viewContent: (m) => isActive(m),
   post: (m) => isActive(m),
   moderate: (m) => roleAtLeast(m, "moderator"),     // remove posts, review join requests, invite
-  manageQuizzes: (m) => roleAtLeast(m, "moderator"), // create/edit/publish/grade
+  manageQuizzes: (m) => roleAtLeast(m, "moderator"), // edit/publish/grade ANY quiz in the room
+  createQuiz: (m) => isActive(m),                    // any active member may create a quiz
   deleteQuiz: (m) => roleAtLeast(m, "owner"),
   manageRoom: (m) => roleAtLeast(m, "owner"),        // settings, roles, bans, delete
 };
+
+/** Did `userId` create this quiz? (accepts ids or populated docs) */
+export const isQuizCreator = (quiz, userId) => Boolean(quiz) && idStr(quiz.creator) === idStr(userId);
+
+/**
+ * May this member manage (edit / publish / grade / see the key of) THIS quiz?
+ * Owners and moderators manage every quiz; any other member manages only their own.
+ */
+export const canManageQuiz = (m, quiz, userId) => isActive(m) && (roleAtLeast(m, "moderator") || isQuizCreator(quiz, userId));
+
+/**
+ * May this member take THIS quiz? Members who can see the answer key because
+ * they moderate someone else's quiz can't; the quiz's own creator can.
+ */
+export const canTakeQuiz = (m, quiz, userId) => isActive(m) && (!roleAtLeast(m, "moderator") || isQuizCreator(quiz, userId));
 
 /**
  * Can this user even SEE that the room exists (discovery/preview)?

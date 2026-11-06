@@ -123,3 +123,64 @@ export async function deleteAvatar(publicId) {
     console.error("Avatar cleanup failed:", err.message);
   }
 }
+
+// ---- Direct (browser -> Cloudinary) material uploads -------------------------
+// Vercel-style hosts reject request bodies over ~4.5 MB before our code runs, so
+// the browser sends each file straight to Cloudinary with a one-use signature from
+// us, then tells the API what it uploaded (POST /materials/register).
+export const materialFolder = () => `${ENV.appName.toLowerCase()}/materials`;
+
+// Every direct upload's public_id starts with the uploader's id, so registering
+// someone else's file (or any other asset in the account) can be refused.
+export const materialIdPrefix = (userId) => `${materialFolder()}/u${userId}-`;
+
+/** Signed parameters the browser needs to upload ONE file. */
+export function signMaterialUpload(filename, fileType, userId) {
+  const resourceType = resourceTypeFor(fileType);
+  const safeName = sanitizeFilename(filename);
+  const lastDot = safeName.lastIndexOf(".");
+  const base = lastDot > 0 ? safeName.slice(0, lastDot) : safeName;
+  const ext = lastDot > 0 ? safeName.slice(lastDot + 1) : "";
+  const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  const idPart = `u${userId}-${base.slice(0, 80)}-${unique}`;
+  const publicId = resourceType === "raw" && ext ? `${idPart}.${ext}` : idPart;
+
+  // Exactly the params the browser will send (besides file/api_key/resource_type).
+  const params = {
+    access_mode: "public", // see the note in uploadBufferToCloudinary
+    folder: materialFolder(),
+    public_id: publicId,
+    timestamp: Math.round(Date.now() / 1000),
+  };
+  const signature = cloudinary.utils.api_sign_request(params, ENV.cloudinary.apiSecret);
+  return {
+    uploadUrl: `https://api.cloudinary.com/v1_1/${ENV.cloudinary.cloudName}/${resourceType}/upload`,
+    apiKey: ENV.cloudinary.apiKey,
+    params,
+    signature,
+  };
+}
+
+/** Delivery URL for a registered asset, rebuilt server-side (never trust a client-sent URL). */
+export function materialDeliveryUrl({ publicId, version, fileName, fileType }) {
+  const resourceType = resourceTypeFor(fileType);
+  const ext = sanitizeFilename(fileName).split(".").pop().toLowerCase().replace("jpeg", "jpg");
+  return cloudinary.url(publicId, {
+    resource_type: resourceType,
+    type: "upload",
+    secure: true,
+    urlAnalytics: false, // keep the stored URL identical in shape to an upload result's secure_url
+    version,
+    // image resources need the format on the URL; raw ones already have it in the public_id
+    ...(resourceType === "image" ? { format: fileType === "pdf" ? "pdf" : ext } : {}),
+  });
+}
+
+// Best effort cleanup of an asset we refuse to keep (failed validation).
+export async function deleteMaterialAsset(publicId, fileType) {
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: resourceTypeFor(fileType), invalidate: true });
+  } catch (err) {
+    console.error("Material asset cleanup failed:", err.message);
+  }
+}

@@ -119,9 +119,9 @@ export async function sweepExpiredAttempts(limit = 100) {
   return due.length;
 }
 
-/** Everyone who may take this quiz: active members who aren't its managers and meet the late-joiner rule. */
+/** Everyone who may take this quiz: active plain members and the quiz's creator, who meet the late-joiner rule. */
 export async function eligibleMemberIds(quiz) {
-  const rows = await RoomMember.find({ room: quiz.room, status: "active", role: "member" }).select("user joinedAt");
+  const rows = await RoomMember.find({ room: quiz.room, status: "active", $or: [{ role: "member" }, { user: quiz.creator }] }).select("user joinedAt");
   return rows
     .filter((m) => quiz.allowLateJoiners !== false || !quiz.publishedAt || new Date(m.joinedAt) <= new Date(quiz.publishedAt))
     .map((m) => m.user);

@@ -7,6 +7,7 @@ export const NOTIFICATION_CATEGORIES = {
   quizzes: "Room quizzes, deadlines and results",
   materials: "New study materials for your courses",
   reminders: "Study goal reminders",
+  calendar: "New events and reminders on the education calendar",
   achievements: "Points, streaks and goals",
   announcements: "Announcements from Study Anchor",
   payments: "Payments and subscription updates",

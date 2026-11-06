@@ -18,7 +18,7 @@ export async function notifyNewMaterial(material, { cap = 2000 } = {}) {
     }).select("_id").limit(cap).lean();
     return await notifyMany(users.map((u) => u._id), {
       category: "materials", type: "new_material",
-      title: `New material for ${course.code}`, body: material.title,
+      title: material.kind === "past_question" ? `New past question for ${course.code}` : `New material for ${course.code}`, body: material.title,
       link: `/material/${material._id}`, dedupeKey: `material:${material._id}:new`,
     });
   } catch (err) {

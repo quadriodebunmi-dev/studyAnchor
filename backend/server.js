@@ -24,6 +24,7 @@ import internalRoutes from "./routes/internalRoutes.js";
 import progressRoutes from "./routes/progressRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
+import calendarRoutes from "./routes/calendarRoutes.js";
 import { settingsMiddleware, refreshSettings } from "./utils/settings.js";
 import { runScheduledJobs } from "./utils/scheduler.js";
 import { initRealtime } from "./utils/realtime.js";
@@ -80,6 +81,7 @@ app.use("/api/internal", internalRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/calendar", calendarRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

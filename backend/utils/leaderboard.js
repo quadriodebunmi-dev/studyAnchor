@@ -16,7 +16,7 @@ export function rankByPoints(entries) {
 /** "Ada Obi" -> "Ada O." — enough to recognise a classmate, not enough to identify a stranger. */
 export function publicName(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "Learner";
+
   if (parts.length === 1) return parts[0];
   return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
@@ -25,9 +25,6 @@ export const VISIBILITY = ["public", "anonymous", "hidden"];
 
 /** What a leaderboard row may show for a user's privacy setting. null = excluded. */
 export function leaderboardIdentity(user) {
-  const v = VISIBILITY.includes(user.leaderboardVisibility) ? user.leaderboardVisibility : "public";
-  if (v === "hidden") return null;
-  if (v === "anonymous") return { name: "Anonymous learner", school: undefined };
   return { name: publicName(user.name), school: user.showSchoolOnLeaderboard ? user.schoolName : undefined };
 }
 
