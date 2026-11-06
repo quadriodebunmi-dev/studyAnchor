@@ -26,6 +26,7 @@ function Board() {
   const [period, setPeriod] = useState("week");
   const [d, setD] = useState(null);
   useEffect(() => { setD(null); getLeaderboard(period).then(setD).catch(() => setD({ entries: [], me: {} })); }, [period]);
+  console.log(d)
   return (
     <div className="max-w-2xl space-y-4">
       <div className="flex gap-1.5">{[["week", "This week"], ["all", "All time"]].map(([k, l]) => <button key={k} onClick={() => setPeriod(k)} aria-pressed={period === k} className="lv-chip">{l}</button>)}</div>
@@ -41,7 +42,7 @@ function Board() {
             {d.entries.map((e, i) => (
               <li key={i} className={`flex items-center gap-3 px-3 py-2.5 text-sm ${e.me ? "bg-accent/15 font-semibold" : ""}`}>
                 <span className="w-8 text-center">{e.rank === 1 ? <Crown className="mx-auto h-4 w-4 text-warning" aria-label="First" /> : e.rank}</span>
-                <span className="min-w-0 flex-1 truncate">{e.name}{e.me && " (you)"}{e.school && <span className="ml-2 text-xs lv-meta">{e.school}</span>}</span>
+                <span className="min-w-0 flex-1 truncate">{e.ref.name}{e.me && " (you)"}{e.school && <span className="ml-2 text-xs lv-meta">{e.school}</span>}</span>
                 <span>{e.points}</span>
               </li>
             ))}

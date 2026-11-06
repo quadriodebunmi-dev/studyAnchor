@@ -23,7 +23,6 @@ function AnswerCard({ answer }) {
       {answer.steps?.length > 0 && <div><h4 className="mb-1.5 text-sm font-semibold">How to work it out</h4><ol className="list-decimal space-y-1.5 pl-5 text-sm">{answer.steps.map((s, i) => <li key={i} className="whitespace-pre-wrap">{s}</li>)}</ol></div>}
       {answer.hints?.length > 0 && <div><h4 className="mb-1.5 text-sm font-semibold">Hints to try first</h4><ul className="list-disc space-y-1 pl-5 text-sm">{answer.hints.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
       {answer.conceptsToReview?.length > 0 && <div><h4 className="mb-1.5 text-sm font-semibold">Review these topics</h4><div className="flex flex-wrap gap-1.5">{answer.conceptsToReview.map((c, i) => <Badge key={i} tone="violet">{c}</Badge>)}</div></div>}
-      <p className="text-xs lv-meta">AI-generated explanation — it can be wrong. Check it against your notes or lecturer.</p>
     </div>
   );
 }

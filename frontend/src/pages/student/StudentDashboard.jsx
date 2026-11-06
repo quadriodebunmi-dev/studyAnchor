@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Lock, FolderKanban, ChevronRight, FileText, DownloadCloud, Search, X, UploadCloud, Compass, Library, Sparkles, MessagesSquare, Target, Trophy, Bookmark } from "lucide-react";
 import StreakCard from "../../components/StreakCard.jsx";
+import UpcomingEvents from "../../components/calendar/UpcomingEvents.jsx";
 import AppShell from "../AppShell.jsx";
 import { StreakChip, ProgressBar } from "../../components/StudyStats.jsx";
 import { useStudyProgress } from "../../hooks/useStudyProgress.js";
@@ -228,6 +229,7 @@ export default function StudentDashboard() {
 
         {/* Server-side streak, points and today's goals. */}
         <div className="mt-3"><StreakCard /></div>
+        <div className="mt-3"><UpcomingEvents /></div>
 
         {dashError && (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-danger/30 bg-danger/10 p-2.5 text-xs text-danger" role="alert">

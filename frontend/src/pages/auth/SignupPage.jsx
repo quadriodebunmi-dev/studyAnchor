@@ -56,7 +56,8 @@ export default function SignupPage() {
       }
       return;
     }
-    if (!school) { setError("Select your school first."); return; }
+    if (!school) { setError("Pick your school from the list, or add it."); return; }
+    if (!form.department) { setError("Pick your department from the list, or add it."); return; }
     if (!form.matricNumber || !form.name || !form.department || !form.level || !form.session || !form.email || !form.password) {
       setError("Please fill in all fields."); return;
     }
@@ -131,7 +132,8 @@ export default function SignupPage() {
               value={form.department}
               onChange={(v) => update("department", v)}
               schoolId={school?._id}
-              placeholder={"Search for your department"}
+              requireSchool
+              placeholder="Search for your department"
             />}
             {!independent && <div className="grid grid-cols-2 gap-3">
               <Select onChange={(e) => update("level", e.target.value)} defaultValue="">

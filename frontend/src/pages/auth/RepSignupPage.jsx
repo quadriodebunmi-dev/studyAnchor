@@ -13,7 +13,7 @@ import { APP_CONFIG, SESSIONS , LEVELS, SEMESTERS,} from "../../config/appConfig
 
 
 export default function RepSignupPage() {
-  const [form, setForm] = useState({ session: SESSIONS[0], repType: "course" ,semester: SEMESTERS[0],});
+  const [form, setForm] = useState({ session: SESSIONS[0], repType: "course" ,semester: SEMESTERS[0], level:"100"});
   const [school, setSchool] = useState(null);
   const [structure, setStructure] = useState(null);
   const [error, setError] = useState("");
@@ -29,9 +29,11 @@ export default function RepSignupPage() {
    const levelOptions = structure?.levels?.length ? structure.levels : LEVELS.map(String);
 
   async function handleSubmit(e) {
+   
     e.preventDefault();
     setError("");
-    if (!school) { setError("Select your school first."); return; }
+    if (!school) { setError("Pick your school from the list, or add it."); return; }
+    if (!form.department) { setError("Pick your department from the list, or add it."); return; }
     if (!form.matricNumber || !form.name || !form.department || !form.email || !form.password) {
       setError("Please fill in all required fields."); return;
     }
@@ -69,7 +71,8 @@ export default function RepSignupPage() {
               value={form.department || ""}
               onChange={(v) => update("department", v)}
               schoolId={school?._id}
-              placeholder={"Search for your department"}
+              requireSchool
+              placeholder="Search for your department"
             />
            <Select value={form.level} onChange={(e) => update("level", e.target.value)} aria-label="Level">
                        <option value="" disabled>Level</option>

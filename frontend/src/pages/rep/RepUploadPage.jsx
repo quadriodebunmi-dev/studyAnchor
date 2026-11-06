@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Upload, X, FileText } from "lucide-react";
 import AppShell from "../AppShell.jsx";
 import { repNavItemsFor } from "./RepDashboard.jsx";
@@ -10,6 +10,7 @@ import UploadProgress from "../../components/UploadProgress.jsx";
 import { uploadMaterial } from "../../services/materialService.js";
 import { useToast } from "../../components/Toast.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import PastQuestionFields, { appendKindFields, emptyKindForm } from "../../components/PastQuestionFields.jsx";
 
 import { DEPARTMENTS, LEVELS, SEMESTERS, SESSIONS } from "../../config/appConfig.js";
 const emptyForm = { code: "", title: "", department: DEPARTMENTS[0], level: LEVELS[0], semester: SEMESTERS[0], session: SESSIONS[0], description: "" };
@@ -22,6 +23,9 @@ export default function RepUploadPage() {
   const [form, setForm] = useState({ description: "", courseId: "" });
   // Stage 2.1 — multiple files per upload instead of one.
   const [files, setFiles] = useState([]);
+  // "Study material" or "Past question" (+ year and paper type). /rep/upload?kind=past_question pre-selects it.
+  const [params] = useSearchParams();
+  const [kindForm, setKindForm] = useState({ ...emptyKindForm, kind: params.get("kind") === "past_question" ? "past_question" : "material" });
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const navigate = useNavigate();
@@ -66,9 +70,11 @@ function defaultCourseForm(user) {
       const fd = new FormData();
       fd.append("courseId", form.courseId);
       fd.append("description", form.description);
+      appendKindFields(fd, kindForm);
       files.forEach((file) => fd.append("files", file));
       const result = await uploadMaterial(fd, setProgress);
-      showToast(result?.materials?.length > 1 ? `${result.materials.length} files uploaded` : "Material uploaded", "success");
+      const noun = kindForm.kind === "past_question" ? "past question" : "material";
+      showToast(result?.materials?.length > 1 ? `${result.materials.length} ${noun}s uploaded` : `${noun[0].toUpperCase()}${noun.slice(1)} uploaded`, "success");
       navigate("/");
     } catch (err) {
       showToast(err.message || "Upload failed", "error");
@@ -80,9 +86,10 @@ function defaultCourseForm(user) {
   return (
     <AppShell sidebarItems={navItems}>
       <div className="max-w-xl">
-        <h1 className="text-2xl font-bold">Upload Material</h1>
+        <h1 className="text-2xl font-bold">{kindForm.kind === "past_question" ? "Upload Past Questions" : "Upload Material"}</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Upload up to {MAX_FILES} files at once — each becomes its own material under this course, titled with its file name.</p>
         <form onSubmit={handleSubmit} className="mt-5 space-y-3">
+          <PastQuestionFields value={kindForm} onChange={(patch) => setKindForm((k) => ({ ...k, ...patch }))} disabled={loading} />
           <Select value={form.courseId} onChange={(e) => setForm((f) => ({ ...f, courseId: e.target.value }))}>
             {courses.map((c) => <option key={c._id} value={c._id}>{c.code} — {c.title}{c.session ? ` (${c.session})` : ""}</option>)}
           </Select>

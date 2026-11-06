@@ -8,6 +8,7 @@ import MaterialCard from "../../components/MaterialCard.jsx";
 import { CardSkeleton } from "../../components/Loader.jsx";
 import { Input } from "../../components/FormFields.jsx";
 import StreakCard from "../../components/StreakCard.jsx";
+import UpcomingEvents from "../../components/calendar/UpcomingEvents.jsx";
 import PlanBadge from "../../components/PlanBadge.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useStudyProgress } from "../../hooks/useStudyProgress.js";
@@ -139,6 +140,7 @@ export default function IndependentDashboard() {
 
         {/* Server-side streak, points and today's goals. */}
         <div className="mt-3"><StreakCard /></div>
+        <div className="mt-3"><UpcomingEvents /></div>
 
         {/* Folders: colour-coded cards like the school dashboard's courses. */}
         {shownFolders.length > 0 && (

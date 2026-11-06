@@ -4,6 +4,7 @@ import { ArrowLeft, Download, Eye, EyeOff, Bookmark, BookmarkCheck, Sparkles, Lo
 import AppShell from "../AppShell.jsx";
 import Button from "../../components/Button.jsx";
 import Badge from "../../components/Badge.jsx";
+import { examTypeLabel } from "../../components/PastQuestionFields.jsx";
 import { InlineLoader } from "../../components/Loader.jsx";
 import { getMaterial, downloadMaterial, triggerFileDownload, toggleBookmark, reportMaterial } from "../../services/materialService.js";
 import { generateQuiz, generateTheoryQuiz } from "../../services/quizService.js";
@@ -254,6 +255,7 @@ export default function MaterialDetailPage() {
           <div className="flex flex-wrap items-center gap-1.5">
             {material.courseId?.code && <span className="text-[11px] font-semibold text-primary">{material.courseId.code}</span>}
             {material.fileType && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase dark:bg-slate-800">{material.fileType}</span>}
+            {material.kind === "past_question" && <Badge tone="indigo">Past question{material.examYear ? ` · ${material.examYear}` : ""}{material.examType ? ` · ${examTypeLabel(material.examType)}` : ""}</Badge>}
             {material.visibility === "private" && <Badge tone="violet"><Lock className="h-3 w-3" /> Only you can see this</Badge>}
             {material.visibility !== "private" && material.status === "pending" && <Badge tone="amber">Awaiting review</Badge>}
             {material.visibility !== "private" && material.status === "rejected" && <Badge tone="red">Rejected</Badge>}

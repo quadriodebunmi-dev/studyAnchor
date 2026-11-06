@@ -94,7 +94,7 @@ export default function RepApprovalsPage() {
             <div className="min-w-0">
               <p className="font-semibold truncate">{m.title}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {m.courseId?.code} · uploaded by {m.uploadedBy?.name} · {new Date(m.createdAt).toLocaleDateString()}
+                {m.kind === "past_question" && <span className="font-semibold text-primary">Past question{m.examYear ? ` ${m.examYear}` : ""} · </span>}{m.courseId?.code} · uploaded by {m.uploadedBy?.name} · {new Date(m.createdAt).toLocaleDateString()}
               </p>
               {m.description && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{m.description}</p>}
             </div>

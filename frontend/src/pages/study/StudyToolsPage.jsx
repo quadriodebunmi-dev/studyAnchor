@@ -14,7 +14,6 @@ export default function StudyToolsPage() {
   return (
     <AppShell>
       <h1 className="lv-page-title">Study tools</h1>
-      <p className="mt-0.5 text-[11px] lv-meta">AI-assisted practice. AI can make mistakes — double-check important answers.</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {TOOLS.map(({ to, icon: Icon, title, text }) => (
           <Link key={to} to={to} className="lv-card-interactive group flex items-center gap-3 p-3">

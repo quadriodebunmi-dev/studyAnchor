@@ -129,7 +129,6 @@ function CreateExam({ onClose, onCreated }) {
         </div>
         <Field label="Explanations"><Select value={f.explanationMode} onChange={set("explanationMode")}><option value="after">After I submit</option><option value="immediate">Let me check answers as I go</option></Select></Field>
         {upgrade ? <UpgradeNotice message={error} /> : error && <p role="alert" className="text-sm text-danger">{error}</p>}
-        <p className="text-xs lv-meta">Questions are AI-generated from your material and can contain mistakes.</p>
         <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="accent" disabled={!materials.length || busy} onClick={run}><Sparkles className="h-4 w-4" />{busy ? "Building exam…" : "Generate exam"}</Button></div>
       </div>
     </Modal>

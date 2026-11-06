@@ -47,7 +47,8 @@ export default function GoogleContinuePage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (!school) { setError("Select your school first."); return; }
+    if (!school) { setError("Pick your school from the list, or add it."); return; }
+    if (!form.department) { setError("Pick your department from the list, or add it."); return; }
     if (!form.matricNumber || !form.department || !form.level || !form.session) {
       setError("Please fill in all fields."); return;
     }
@@ -121,7 +122,8 @@ export default function GoogleContinuePage() {
               value={form.department || ""}
               onChange={(v) => update("department", v)}
               schoolId={school?._id}
-              placeholder={"Search for your department"}
+              requireSchool
+              placeholder="Search for your department"
             />
             <div className="grid grid-cols-2 gap-3">
               <Select onChange={(e) => update("level", e.target.value)} defaultValue="">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, DownloadCloud } from "lucide-react";
+import { ArrowLeft, FileText, DownloadCloud, FileQuestion } from "lucide-react";
 import AppShell from "../AppShell.jsx";
 import MaterialCard from "../../components/MaterialCard.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
@@ -63,9 +63,14 @@ export default function CoursePage() {
           <h1 className="lv-page-title">{course.title}</h1>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{course.department} · {course.level} Level · {course.semester}{course.session && ` · ${course.session} Session`}</p>
         </div>
-        <Button size="sm" variant="outline" disabled={downloadingAll} onClick={handleDownloadAll}>
-          <DownloadCloud className="w-3.5 h-3.5" /> {downloadingAll ? "Preparing zip..." : "Download all"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => navigate(`/past-questions?courseId=${id}`)}>
+            <FileQuestion className="w-3.5 h-3.5" /> Past questions
+          </Button>
+          <Button size="sm" variant="outline" disabled={downloadingAll} onClick={handleDownloadAll}>
+            <DownloadCloud className="w-3.5 h-3.5" /> {downloadingAll ? "Preparing zip..." : "Download all"}
+          </Button>
+        </div>
       </div>
       <div className="mt-3 flex justify-end">
         <Select className="w-auto py-1.5 text-xs" aria-label="Sort materials" value={sort} onChange={(e) => setSort(e.target.value)}>

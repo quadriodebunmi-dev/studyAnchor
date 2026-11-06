@@ -193,7 +193,6 @@ export default function AssistantPage() {
               <div className="max-w-md">
                 <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-accent/20 text-primary"><Bot className="h-6 w-6" /></span>
                 <p className="mt-3 font-display font-semibold">How can I help you study?</p>
-                <p className="mt-1 text-sm lv-meta">AI answers can be wrong — double-check anything important against your lecture notes.</p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {prompts.map((p) => (
                     <button key={p} onClick={() => send(p)} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs hover:border-accent hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">

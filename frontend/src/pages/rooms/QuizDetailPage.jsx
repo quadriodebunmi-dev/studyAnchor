@@ -28,7 +28,7 @@ export default function QuizDetailPage() {
       if (q.myAttempt?.status === "submitted") {
         getMyResult(roomId, quizId).then(setResult).catch(() => {});
         getLeaderboard(roomId, quizId).then(setBoard).catch(() => {});
-      } else if (!d.canAttempt) getLeaderboard(roomId, quizId).then(setBoard).catch(() => {});
+      } else if (!d.canAttempt || d.canManage) getLeaderboard(roomId, quizId).then(setBoard).catch(() => {});
     } catch (e) { setError(e.message || "Quiz not found."); }
   }, [roomId, quizId]);
 
@@ -44,7 +44,7 @@ export default function QuizDetailPage() {
   if (error) return <AppShell><p className="py-16 text-center text-danger">{error}</p></AppShell>;
   if (!data) return <AppShell><InlineLoader /></AppShell>;
 
-  const { quiz, canAttempt } = data;
+  const { quiz, canAttempt, canManage } = data;
   const [stateLabel, tone] = STATE_LABEL[quiz.state] || ["", "slate"];
   const mine = quiz.myAttempt;
   const canStart = canAttempt && quiz.state === "available" && (!mine || mine.status === "in_progress");
@@ -57,7 +57,7 @@ export default function QuizDetailPage() {
           <h1 className="text-2xl font-bold">{quiz.title}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={tone}>{stateLabel}</Badge><Badge>{quiz.questionCount} questions</Badge><Badge>{quiz.totalMarks} marks</Badge>{quiz.timeLimitMinutes > 0 && <Badge tone="amber"><Clock className="h-3 w-3" />{quiz.timeLimitMinutes} min</Badge>}</div>
         </div>
-        {!canAttempt && <Link to={`/rooms/${roomId}/quizzes/${quizId}/manage`}><Button variant="outline"><Settings2 className="h-4 w-4" />Manage quiz</Button></Link>}
+        {canManage && <Link to={`/rooms/${roomId}/quizzes/${quizId}/manage`}><Button variant="outline"><Settings2 className="h-4 w-4" />Manage quiz</Button></Link>}
       </div>
 
       {quiz.instructions && <p className="mt-4 whitespace-pre-wrap rounded-2xl bg-slate-100 p-4 text-sm dark:bg-slate-800">{quiz.instructions}</p>}

@@ -37,6 +37,11 @@ export default function QuizManagePage() {
   const { quiz, questions } = data;
   const [stateLabel, tone] = STATE_LABEL[quiz.state] || ["", "slate"];
   const patch = (next) => setData((d) => ({ ...d, ...next }));
+  async function removeQuiz() {
+    if (!window.confirm("Delete this quiz? Its questions and all attempts will be permanently removed.")) return;
+    try { await api.deleteQuiz(roomId, quiz._id); toast("Quiz deleted"); navigate(`/rooms/${roomId}?tab=quizzes`); }
+    catch (e) { toast(e.message || "Couldn't delete the quiz.", "error"); }
+  }
 
   return (
     <AppShell>
@@ -46,7 +51,12 @@ export default function QuizManagePage() {
           <h1 className="text-2xl font-bold">{quiz.title}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={tone}>{stateLabel}</Badge><Badge>{quiz.questionCount} questions</Badge><Badge>{quiz.totalMarks} marks</Badge>{quiz.locked && <Badge tone="amber"><Lock className="h-3 w-3" />Questions locked</Badge>}</div>
         </div>
-        <Button variant="outline" onClick={() => navigate(`/rooms/${roomId}/quizzes/${quizId}/preview`)}><Eye className="h-4 w-4" />Preview as a member</Button>
+        <div className="flex flex-wrap gap-2">
+          {/* You made this quiz, so you can take it too once it's published. */}
+          {quiz.status === "published" && <Button variant="outline" onClick={() => navigate(`/rooms/${roomId}/quizzes/${quizId}`)}>Take the quiz</Button>}
+          <Button variant="outline" onClick={() => navigate(`/rooms/${roomId}/quizzes/${quizId}/preview`)}><Eye className="h-4 w-4" />Preview as a member</Button>
+          <Button variant="ghost" className="text-danger" onClick={removeQuiz}><Trash2 className="h-4 w-4" />Delete quiz</Button>
+        </div>
       </div>
 
       <div className="mt-5 flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800" role="tablist">
@@ -99,7 +109,7 @@ function QuestionsTab({ roomId, quiz, questions, patch, reload }) {
       )}
       {pending > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-accent/15 p-3 text-sm">
-          <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" />{pending} AI-generated question{pending === 1 ? "" : "s"} need your review before you can publish. Check each answer is correct.</span>
+          <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" />{pending} question{pending === 1 ? "" : "s"} need{pending === 1 ? "s" : ""} your review before you can publish.</span>
           {!locked && <Button size="sm" onClick={async () => { await api.approveQuestion(roomId, quiz._id, "all"); reload(); }}>Approve all</Button>}
         </div>
       )}
@@ -111,7 +121,7 @@ function QuestionsTab({ roomId, quiz, questions, patch, reload }) {
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-medium"><span className="mr-1.5 text-slate-400">{i + 1}.</span>{q.prompt}</p>
                 <span className="flex shrink-0 items-center gap-1.5">
-                  {q.source === "ai" && <Badge tone={q.reviewStatus === "approved" ? "green" : "amber"}>{q.reviewStatus === "approved" ? "AI · reviewed" : "AI · needs review"}</Badge>}
+                  {q.source === "ai" && <Badge tone={q.reviewStatus === "approved" ? "green" : "amber"}>{q.reviewStatus === "approved" ? "Reviewed" : "Needs review"}</Badge>}
                   <Badge>{q.marks} mk</Badge>
                 </span>
               </div>
@@ -174,7 +184,7 @@ function QuestionEditor({ roomId, quizId, draft, onClose, onSaved }) {
         ) : (
           <>
             <Field label="Model answer"><Textarea value={q.expectedAnswer} onChange={set("expectedAnswer")} rows={3} /></Field>
-            <Field label="Marking points" hint="What earns marks — used for AI-assisted marking and by you."><Textarea value={q.rubric} onChange={set("rubric")} rows={2} /></Field>
+            <Field label="Marking points" hint="What earns marks — used for marking and by you."><Textarea value={q.rubric} onChange={set("rubric")} rows={2} /></Field>
           </>
         )}
         <Field label="Marks"><Input type="number" min="0.5" step="0.5" value={q.marks} onChange={set("marks")} /></Field>
@@ -212,7 +222,6 @@ function GenerateModal({ roomId, quiz, onClose, onDone }) {
           <Field label="Type"><Select value={f.format} onChange={set("format")}><option value="objective">Multiple choice</option><option value="theory">Written</option><option value="mixed">Mixed</option></Select></Field>
           <Field label="Difficulty"><Select value={f.difficulty} onChange={set("difficulty")}><option>Easy</option><option>Medium</option><option>Hard</option></Select></Field>
         </div>
-        <p className="rounded-xl bg-slate-100 p-3 text-xs dark:bg-slate-800">AI can make mistakes. Every generated question is saved as <b>needs review</b> and can't be published until you've checked it.</p>
         {upgrade ? <UpgradeNotice message={error} /> : error && <p role="alert" className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="accent" onClick={run} disabled={busy || (!materials.length && !f.topic.trim())}><Sparkles className="h-4 w-4" />{busy ? "Generating…" : "Generate"}</Button></div>
       </div>
