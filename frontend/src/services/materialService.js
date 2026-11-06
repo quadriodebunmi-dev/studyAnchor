@@ -1,3 +1,4 @@
+import axios from "axios";
 import api from "./api.js";
 
 export async function getMaterial(id) {
@@ -5,18 +6,71 @@ export async function getMaterial(id) {
   return res.data.material;
 }
 
-// Stage 2.1 — one request can upload multiple files; returns every created
-// Material plus the count of any that failed and the resulting status
-// (students land in "pending", reps in "approved" — see Stage 2.2).
+// Uploads one or more files. Same signature as before, so callers don't change:
+// `formData` holds the text fields plus one or more "files" entries, and
 // `onProgress(percent)` (optional) is called as bytes are sent, 0–100.
+//
+// Hosts like Vercel reject request bodies over ~4.5 MB, so the files do NOT go through
+// our API. Instead:
+//   1. ask the API to sign an upload for each file (it checks type and size),
+//   2. send each file straight to Cloudinary,
+//   3. tell the API what was uploaded; it verifies, extracts text and creates the Materials.
+// Returns { materials, failed, status } — students land in "pending", reps in
+// "approved" (see Stage 2.2).
+const DIRECT_UPLOADS_AT_ONCE = 2;
+
 export async function uploadMaterial(formData, onProgress) {
-  const res = await api.post("/materials", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-    onUploadProgress: onProgress
-      ? (e) => { if (e.total) onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100))); }
-      : undefined,
+  const files = formData.getAll("files").filter((f) => typeof f !== "string");
+  if (files.length === 0) throw { message: "Choose at least one file to upload." };
+  const fields = {};
+  for (const [key, value] of formData.entries()) if (key !== "files" && typeof value === "string") fields[key] = value;
+
+  // 1. Signatures (also where an unsupported type or oversized file is refused)
+  const sigRes = await api.post("/materials/upload-signature", {
+    files: files.map((f) => ({ fileName: f.name, size: f.size })),
   });
-  return res.data; // { materials, failed, status }
+  const { signatures } = sigRes.data;
+
+  // 2. Straight to Cloudinary. Plain axios: our `api` instance would send the login token there.
+  const totalBytes = files.reduce((n, f) => n + f.size, 0) || 1;
+  const sentBytes = files.map(() => 0);
+  const report = () => onProgress?.(Math.min(99, Math.round((sentBytes.reduce((a, b) => a + b, 0) / totalBytes) * 100)));
+  const uploaded = new Array(files.length).fill(null);
+  const errors = [];
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(DIRECT_UPLOADS_AT_ONCE, files.length) }, async () => {
+      while (next < files.length) {
+        const i = next++;
+        const file = files[i];
+        const sig = signatures[i];
+        const body = new FormData();
+        body.append("file", file);
+        body.append("api_key", sig.apiKey);
+        body.append("signature", sig.signature);
+        Object.entries(sig.params).forEach(([k, v]) => body.append(k, String(v)));
+        try {
+          const res = await axios.post(sig.uploadUrl, body, {
+            onUploadProgress: (e) => { sentBytes[i] = Math.min(file.size, e.loaded || 0); report(); },
+          });
+          sentBytes[i] = file.size;
+          uploaded[i] = { publicId: res.data.public_id, version: res.data.version, fileName: file.name };
+        } catch (err) {
+          const why = err.response?.data?.error?.message || "Network error";
+          errors.push(`${file.name}: ${why}`);
+        }
+        report();
+      }
+    })
+  );
+
+  const done = uploaded.filter(Boolean);
+  if (done.length === 0) throw { message: errors[0] || "Upload failed. Please try again." };
+
+  // 3. Register what made it (the bar sits at 100% = "processing" while the API reads the files)
+  onProgress?.(100);
+  const res = await api.post("/materials/register", { ...fields, files: done });
+  return { ...res.data, failed: (res.data.failed || 0) + errors.length };
 }
 
 // Course Rep edits their own material's title/description.
@@ -84,8 +138,9 @@ export async function myMaterials({ page, limit } = {}) {
 }
 
 // Stage 2.2 — a student's own uploads, across every status ("My uploads").
-export async function getMyUploads({ page, limit, folder, q } = {}) {
-  const res = await api.get("/materials/mine/student", { params: { page, limit, folder, q } });
+// `kind`: "past_question" | "material" narrows the list; omit for everything.
+export async function getMyUploads({ page, limit, folder, q, kind } = {}) {
+  const res = await api.get("/materials/mine/student", { params: { page, limit, folder, q, kind } });
   return res.data; // { materials, pagination }
 }
 
@@ -97,6 +152,16 @@ export async function getMyUploads({ page, limit, folder, q } = {}) {
 export async function getPickableMaterials({ q, page, limit, scope } = {}) {
   const res = await api.get("/materials/pickable", { params: { q: q || undefined, page, limit, scope: scope || undefined } });
   return res.data; // { materials, pagination }
+}
+
+// Past exam / test papers: your own plus what your school shares.
+// `source`: "all" (default) | "class" (shared by the school) | "personal" (your own uploads).
+// Returns { materials, years, pagination } — `years` fills the year filter.
+export async function getPastQuestions({ q, courseId, year, source, page, limit } = {}) {
+  const res = await api.get("/materials/past-questions", {
+    params: { q: q || undefined, courseId: courseId || undefined, year: year || undefined, source: source && source !== "all" ? source : undefined, page, limit },
+  });
+  return res.data;
 }
 
 // Personal library folders with counts: [{ name, count }] (name "" = unfiled).

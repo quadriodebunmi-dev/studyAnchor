@@ -18,7 +18,7 @@ export const STATE_LABEL = {
 const fmt = (d) => (d ? new Date(d).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "");
 
 export default function RoomQuizzesTab({ room }) {
-  const canManage = ["owner", "moderator"].includes(room.myRole);
+  // Any member can create a quiz; they manage the ones they made (owners and moderators manage all).
   const [quizzes, setQuizzes] = useState(null);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
@@ -41,9 +41,9 @@ export default function RoomQuizzesTab({ room }) {
 
   return (
     <div>
-      {canManage && <div className="mb-4 flex justify-end"><Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New quiz</Button></div>}
+      <div className="mb-4 flex justify-end"><Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New quiz</Button></div>
       {quizzes === null ? <InlineLoader /> : quizzes.length === 0 ? (
-        <EmptyState icon={<ClipboardList className="h-7 w-7" />} title="No quizzes yet" message={canManage ? "Create a quiz for the room — write questions yourself or generate them from study material." : "Quizzes shared in this room will appear here."} />
+        <EmptyState icon={<ClipboardList className="h-7 w-7" />} title="No quizzes yet" message="Create a quiz for the room — write questions yourself or generate them from study material." />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {quizzes.map((q) => {
@@ -56,6 +56,7 @@ export default function RoomQuizzesTab({ room }) {
                     <p className="font-display font-semibold">{q.title}</p>
                     <Badge tone={tone}>{label}</Badge>
                   </div>
+                  {q.creator?.name && <p className="mt-0.5 text-xs lv-meta">By {q.creator.name}</p>}
                   <p className="mt-1 text-xs lv-meta">{q.questionCount} question{q.questionCount === 1 ? "" : "s"} · {q.totalMarks} marks{q.timeLimitMinutes > 0 && ` · ${q.timeLimitMinutes} min`}</p>
                   {q.state === "scheduled" && <p className="mt-2 flex items-center gap-1 text-xs"><Clock className="h-3 w-3" />Opens {fmt(q.opensAt)}</p>}
                   {q.state === "available" && q.closesAt && <p className="mt-2 flex items-center gap-1 text-xs"><Clock className="h-3 w-3" />Due {fmt(q.closesAt)}</p>}

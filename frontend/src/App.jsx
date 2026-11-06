@@ -25,6 +25,8 @@ import QuizPage from "./pages/student/QuizPage.jsx";
 import StudyAnalyticsPage from "./pages/student/StudyAnalyticsPage.jsx";
 import MyUploadsPage from "./pages/student/MyUploadsPage.jsx";
 import LibraryPage from "./pages/student/LibraryPage.jsx";
+import PastQuestionsPage from "./pages/student/PastQuestionsPage.jsx";
+import CalendarPage from "./pages/shared/CalendarPage.jsx";
 
 import RepDashboard from "./pages/rep/RepDashboard.jsx";
 import RepUploadPage from "./pages/rep/RepUploadPage.jsx";
@@ -116,6 +118,8 @@ export default function App() {
         <Route path="/analytics" element={<ProtectedRoute roles={["student", "rep"]}><StudyAnalyticsPage /></ProtectedRoute>} />
         <Route path="/library" element={<ProtectedRoute roles={["student"]}><LibraryPage /></ProtectedRoute>} />
         <Route path="/my-uploads" element={<ProtectedRoute roles={["student"]}><MyUploadsPage /></ProtectedRoute>} />
+        <Route path="/past-questions" element={<ProtectedRoute roles={["student", "rep"]}><PastQuestionsPage /></ProtectedRoute>} />
+        <Route path="/calendar" element={<ProtectedRoute roles={["student", "rep"]}><CalendarPage /></ProtectedRoute>} />
         <Route path="/course/:id" element={<ProtectedRoute roles={["student", "rep"]}><CoursePage /></ProtectedRoute>} />
         <Route path="/material/:id" element={<ProtectedRoute roles={["student", "rep"]}><MaterialDetailPage /></ProtectedRoute>} />
         <Route path="/quiz/:id" element={<ProtectedRoute roles={["student", "rep"]}><QuizPage /></ProtectedRoute>} />

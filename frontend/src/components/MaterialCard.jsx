@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Badge from "./Badge.jsx";
+import { examTypeLabel } from "./PastQuestionFields.jsx";
 
 const ICONS = {
   pdf: FileText,
@@ -38,6 +39,7 @@ export default function MaterialCard({ material, onOpen, isBookmarked, foreign }
   const courseCode = material.courseId?.code || material.course?.code;
   const uploader = material.uploadedBy?.name || (typeof material.uploadedBy === "string" ? material.uploadedBy : "");
   const when = material.createdAt || material.date;
+  const pastQuestion = material.kind === "past_question";
 
   return (
     <button onClick={onOpen} className="lv-card-interactive group flex w-full items-start gap-3 p-3 text-left">
@@ -53,6 +55,7 @@ export default function MaterialCard({ material, onOpen, isBookmarked, foreign }
         <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] lv-meta">
           <span className="font-medium">{fileTypeLabel(material.fileType)}</span>
           {courseCode && <span>· {courseCode}</span>}
+          {pastQuestion && material.examYear && <span>· {material.examYear}</span>}
           {uploader && <span className="max-w-[9rem] truncate">· {uploader}</span>}
           {when && <span>· {new Date(when).toLocaleDateString()}</span>}
           {material.size && <span>· {material.size}</span>}
@@ -61,8 +64,9 @@ export default function MaterialCard({ material, onOpen, isBookmarked, foreign }
           </span>
         </span>
 
-        {(foreign || material.visibility === "private" || material.status === "pending" || material.status === "rejected" || hasQuiz) && (
+        {(pastQuestion || foreign || material.visibility === "private" || material.status === "pending" || material.status === "rejected" || hasQuiz) && (
           <span className="mt-1.5 flex flex-wrap gap-1">
+            {pastQuestion && <Badge tone="indigo">Past question{material.examType ? ` · ${examTypeLabel(material.examType)}` : ""}</Badge>}
             {foreign && <Badge tone="violet">Other department</Badge>}
             {material.visibility === "private" && <Badge tone="violet">Private</Badge>}
             {material.status === "pending" && <Badge tone="amber">Awaiting review</Badge>}

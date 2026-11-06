@@ -53,7 +53,7 @@ export function ReviewList({ review }) {
           )}
 
           {q.feedback && <p className="mt-2 text-sm"><span className="text-xs lv-meta">Feedback · </span>{q.feedback}</p>}
-          {q.graderType === "ai" && <p className="mt-1 text-xs text-warning">{q.gradingStatus === "final" ? "AI-assisted marking, confirmed." : "Marked with AI assistance — awaiting confirmation. This mark may change."}</p>}
+          {q.graderType === "ai" && <p className="mt-1 text-xs text-warning">{q.gradingStatus === "final" ? "Marking confirmed." : "Awaiting confirmation. This mark may change."}</p>}
           {q.explanation && <p className="mt-2 rounded-lg bg-primary/5 p-3 text-sm"><span className="font-medium">Explanation: </span>{q.explanation}</p>}
         </li>
       ))}
@@ -73,7 +73,7 @@ export function Leaderboard({ data }) {
           {data.entries.map((e, i) => (
             <tr key={i} className={`border-t border-slate-200 dark:border-slate-800 ${e.me ? "bg-accent/15 font-semibold" : ""}`}>
               <td className="px-4 py-2">{e.rank}</td>
-              <td className="px-4 py-2">{e.name}{e.me && " (you)"}</td>
+              <td className="px-4 py-2">{e.name}{e.me && " (you)"}{e.creator && <span className="ml-2 text-xs lv-meta" title="Made this quiz">quiz creator</span>}</td>
               <td className="px-4 py-2">{e.score}/{e.maxScore} · {pct(e.percentage)}{e.provisional && <span className="ml-2 text-xs text-warning" title="Some written answers aren't finalised yet">provisional</span>}</td>
               {data.tieBreak === "time" && <td className="px-4 py-2">{e.durationSeconds != null ? `${Math.floor(e.durationSeconds / 60)}m ${e.durationSeconds % 60}s` : "—"}</td>}
             </tr>

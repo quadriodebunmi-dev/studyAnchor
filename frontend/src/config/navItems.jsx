@@ -2,6 +2,7 @@ import React from "react";
 import {
   LayoutDashboard, Compass, Bookmark, BarChart3, UploadCloud, UserCircle2,
   Upload, FolderKanban, ClipboardCheck, Bot, GraduationCap, MessagesSquare, Sparkles, Library, Target, Trophy,
+  FileQuestion, CalendarDays,
 } from "lucide-react";
 
 const icon = (Icon) => <Icon className="w-4 h-4" />;
@@ -11,6 +12,8 @@ const explore = { to: "/explore", label: "Explore Feed", short: "Explore", icon:
 const assistant = { to: "/assistant", label: "AI Assistant", icon: icon(Bot) };
 const rooms = { to: "/rooms", label: "Rooms", icon: icon(MessagesSquare), tab: true };
 const studyTools = { to: "/study", label: "Study Tools", short: "Study", icon: icon(Sparkles), tab: true };
+const pastQuestions = { to: "/past-questions", label: "Past Questions", short: "Past Qs", icon: icon(FileQuestion) };
+const calendar = { to: "/calendar", label: "Calendar", icon: icon(CalendarDays) };
 const goals = { to: "/goals", label: "Goals", icon: icon(Target) };
 const points = { to: "/points", label: "Leaderboard", icon: icon(Trophy) };
 const bookmarks = { to: "/bookmarks", label: "Bookmarks", icon: icon(Bookmark) };
@@ -24,6 +27,8 @@ export const studentNavItems = [
   { to: "/", label: "Dashboard", short: "Home", icon: icon(LayoutDashboard), end: true, tab: true },
   { to: "/library", label: "My Library", icon: icon(Library) },
   explore,
+  pastQuestions,
+  calendar,
   rooms,
   studyTools,
   goals,
@@ -40,6 +45,8 @@ export const studentNavItems = [
 export const independentNavItems = [
   { to: "/", label: "My Library", short: "Library", icon: icon(Library), end: true, tab: true },
   { to: "/my-uploads", label: "Upload", icon: icon(UploadCloud), tab: true },
+  pastQuestions,
+  calendar,
   studyTools,
   goals,
   points,
@@ -57,7 +64,7 @@ export function repNavItemsFor(user, pendingCount = 0) {
     return [
       { to: "/", label: "Dashboard", short: "Home", icon: icon(LayoutDashboard), end: true, tab: true },
       { to: "/rep/courses", label: "Manage Courses", short: "Courses", icon: icon(FolderKanban), tab: true },
-      studentDashboard, explore, rooms, studyTools, goals, points, assistant, bookmarks, analytics, profile,
+      studentDashboard, explore, pastQuestions, calendar, rooms, studyTools, goals, points, assistant, bookmarks, analytics, profile,
     ];
   }
   return [
@@ -67,6 +74,7 @@ export function repNavItemsFor(user, pendingCount = 0) {
      studentDashboard,
     { to: "/rep/approvals", label: "Student Approvals", short: "Approvals", icon: icon(ClipboardCheck), badge: pendingCount, tab: true },
     { to: "/rep/courses", label: "My Courses", icon: icon(FolderKanban) },
+    pastQuestions, calendar,
     rooms, studyTools, goals, points, assistant, bookmarks, analytics, profile,
   ];
 }
