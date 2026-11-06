@@ -2,7 +2,7 @@ import RoomQuizQuestion from "../models/RoomQuizQuestion.js";
 import RoomQuizAttempt from "../models/RoomQuizAttempt.js";
 import RoomQuiz from "../models/RoomQuiz.js";
 import { PLATFORM } from "../config/platform.js";
-import { can } from "../utils/roomPermissions.js";
+import { canTakeQuiz } from "../utils/roomPermissions.js";
 import {
   computeQuizState, attemptDeadline, isAttemptExpired, isEligibleMember, isResultsReleased,
   attemptQuestionView, reviewQuestionView, sanitizeAnswers,
@@ -27,8 +27,10 @@ const orderQuestions = (quizId) => RoomQuizQuestion.find({ quiz: quizId }).sort(
 export async function startAttempt(req, res, next) {
   try {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
-    if (can.manageQuizzes(req.membership)) {
-      return res.status(403).json({ message: "Quiz creators and moderators can see the answer key, so they can't take the quiz. Use Preview instead." });
+    // The quiz's own creator may take it. Moderators who manage someone else's quiz can
+    // see its answer key, so they can't.
+    if (!canTakeQuiz(req.membership, quiz, req.user._id)) {
+      return res.status(403).json({ message: "Moderators can see the answer key of other people's quizzes, so they can't take them. Use Preview instead." });
     }
     if (!isEligibleMember(quiz, req.membership)) {
       return res.status(403).json({ message: "This quiz was published before you joined the room, so it isn't open to you." });

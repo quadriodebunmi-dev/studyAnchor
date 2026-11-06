@@ -20,6 +20,16 @@ const DEFAULTS = {
   },
   // Profile picture: the app sends an already-cropped 512px JPEG (~50–150 KB), so this is generous.
   profile: { avatarMaxBytes: 1024 * 1024 },
+  // Study materials go browser -> Cloudinary directly (serverless hosts reject request
+  // bodies over ~4.5 MB), so this cap is enforced when the upload is signed and again
+  // when it is registered. Your Cloudinary plan has its own per-file cap (the free
+  // plan allows 10 MB) — raise this only as far as that allows.
+  materials: {
+    maxFileBytes: 50 * 1024 * 1024,
+    maxFiles: 10,
+    // Text extraction reads the whole file into memory; skip it above this size.
+    extractMaxBytes: 15 * 1024 * 1024,
+  },
   rooms: {
     maxMembers: 500,
     maxRoomsCreatedPerDay: 5,

@@ -73,6 +73,7 @@ const CACHE_MS = 60 * 1000;
 async function topAllTime(size) {
   const users = await User.find({ ...ELIGIBLE, points: { $gt: 0 } }).sort({ points: -1, _id: 1 }).limit(size)
     .select("name points leaderboardVisibility showSchoolOnLeaderboard schoolId").populate("schoolId", "name");
+   // console.log(users.map((u) => ({ id: String(u._id), points: u.points, user: u })))
   return users.map((u) => ({ id: String(u._id), points: u.points, user: u }));
 }
 
@@ -121,15 +122,14 @@ export async function leaderboard(req, res, next) {
     if (!hit || Date.now() - hit.at > CACHE_MS) {
       const raw = period === "week" ? await topWeekly(size) : await topAllTime(size);
       const ranked = rankByPoints(raw.map((r) => ({ id: r.id, points: r.points, ref: r.user })));
+      
       hit = {
         at: Date.now(),
-        data: ranked.map((e) => {
-          const ident = leaderboardIdentity({ ...e.ref, schoolName: e.ref.schoolId?.name });
-          return ident ? { id: e.id, rank: e.rank, points: e.points, name: ident.name, school: ident.school } : null;
-        }).filter(Boolean),
+        data: ranked,
       };
       cache.set(period, hit);
     }
+   // console.log(hit)
     const me = await myRank(req.user, period);
     const myId = String(req.user._id);
     res.json({

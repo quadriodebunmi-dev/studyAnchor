@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import User from "../models/User.js";
 import School from "../models/School.js";
+import { resolveDepartment, DEPARTMENT_NOT_FOUND_MESSAGE } from "../utils/departments.js";
 import ActivityLog from "../models/ActivityLog.js";
 import { ENV } from "../config/env.js";
 import { isValidEmail, isValidMatric, isValidPassword } from "../utils/validators.js";
@@ -79,12 +80,16 @@ export async function signup(req, res, next) {
     const school = await School.findById(schoolId);
     if (!school) return res.status(400).json({ message: "Select a valid school, or request yours first." });
 
+    // The department must be one that exists at this school (picked or added).
+    const dept = await resolveDepartment(school._id, department);
+    if (!dept) return res.status(400).json({ message: DEPARTMENT_NOT_FOUND_MESSAGE });
+
     const exists = await User.findOne({ $or: [{ email }, { matricNumber }] });
     if (exists) return res.status(409).json({ message: "An account with that email or matric number already exists." });
 
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({
-      matricNumber, name, department, level, semester, session, email, password: hashed, role: "student", schoolId,
+      matricNumber, name, department: dept.name, level, semester, session, email, password: hashed, role: "student", schoolId,
     });
 
     await sendAuthResponse(res, user, 201);
@@ -94,12 +99,15 @@ export async function signup(req, res, next) {
 // POST /api/auth/rep-signup  (course rep application -> pending)
 export async function repSignup(req, res, next) {
   try {
-    const { matricNumber, name, department, level, semester, repCourses, email, password, repNote, session, repType, schoolId } = req.body;
+    const { matricNumber, name, department, level , semester, repCourses, email, password, repNote, session, repType, schoolId } = req.body;
     if (!matricNumber || !name || !department || !level || !semester || !email || !password || !schoolId) {
       return res.status(400).json({ message: "All required fields must be filled, including your school." });
     }
     const school = await School.findById(schoolId);
     if (!school) return res.status(400).json({ message: "Select a valid school, or request yours first." });
+
+    const dept = await resolveDepartment(school._id, department);
+    if (!dept) return res.status(400).json({ message: DEPARTMENT_NOT_FOUND_MESSAGE });
 
     const resolvedRepType = repType === "class" ? "class" : "course";
     const exists = await User.findOne({ $or: [{ email }, { matricNumber }] });
@@ -107,7 +115,7 @@ export async function repSignup(req, res, next) {
 
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({
-      matricNumber, name, level, semester, department, repCourses, email, password: hashed, session, schoolId,
+      matricNumber, name, level, semester, department: dept.name, repCourses, email, password: hashed, session, schoolId,
       role: "rep", repStatus: "active", repNote, repType: resolvedRepType,
     });
 
@@ -184,6 +192,9 @@ export async function googleLogin(req, res, next) {
     const school = await School.findById(schoolId);
     if (!school) return res.status(400).json({ message: "Select a valid school, or request yours first." });
 
+    const dept = await resolveDepartment(school._id, department);
+    if (!dept) return res.status(400).json({ message: DEPARTMENT_NOT_FOUND_MESSAGE });
+
     const clash = await User.findOne({ matricNumber });
     if (clash) return res.status(409).json({ message: "An account with that matric number already exists." });
 
@@ -191,7 +202,7 @@ export async function googleLogin(req, res, next) {
       name: payload.name,
       email: payload.email,
       googleId: payload.sub,
-      matricNumber, department, level, session, schoolId, semester: semester || "First Semester",
+      matricNumber, department: dept.name, level, session, schoolId, semester: semester || "First Semester",
       role: "student",
     });
 
@@ -275,9 +286,19 @@ export async function updateProfile(req, res, next) {
       user.learnerType = "school";
     }
 
+    // A changed department (or any department at a new school) must exist at
+    // the school the user belongs to — picked from the list or added there.
+    let nextDepartment = department;
+    const departmentSchoolId = newSchool?._id || user.schoolId;
+    if (!isIndependent(user) && department && departmentSchoolId && (newSchool || department !== user.department)) {
+      const dept = await resolveDepartment(departmentSchoolId, department);
+      if (!dept) return res.status(400).json({ message: DEPARTMENT_NOT_FOUND_MESSAGE });
+      nextDepartment = dept.name;
+    }
+
     if (name) user.name = name;
     if (!isIndependent(user)) {
-      if (department) user.department = department;
+      if (nextDepartment) user.department = nextDepartment;
       if (level) user.level = Number(level);
       if (semester) user.semester = semester;
       if (session) user.session = session;

@@ -4,7 +4,7 @@ import { PLATFORM } from "../config/platform.js";
 import { trimInputs } from "../middleware/trimInputs.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { userLimiter, roomWriteLimiter, postLimiter, quizSaveLimiter, studyAiLimiter } from "../middleware/rateLimitMiddleware.js";
-import { loadRoom, requireRoomMember, requireRoomModerator, requireRoomOwner, requireQuizManager } from "../middleware/roomMiddleware.js";
+import { loadRoom, requireRoomMember, requireRoomModerator, requireRoomOwner, requireQuizManager, requireQuizCreator, requireQuizDeleter } from "../middleware/roomMiddleware.js";
 import { requireAIFeature } from "../utils/aiGuard.js";
 import { requireFeature } from "../middleware/featureMiddleware.js";
 import {
@@ -71,15 +71,16 @@ router.post("/:roomId/reports/:reportId/dismiss", loadRoom, requireRoomModerator
 
 // ---- quizzes (members)
 const memberOnly = [loadRoom, requireRoomMember];
+// Owners/moderators manage any quiz; any other member manages the quizzes they created.
 const manager = [loadRoom, requireRoomMember, requireQuizManager];
 const aiGen = requireAIFeature({ entitlement: "roomQuizzes", usage: "roomQuizGeneration" });
 const aiGrade = requireAIFeature({ entitlement: "roomQuizzes", usage: "theoryGrading" });
 
 router.get("/:roomId/quizzes", ...memberOnly, listQuizzes);
-router.post("/:roomId/quizzes", roomWriteLimiter, ...manager, requireFeature("roomQuizzes"), createQuiz);
+router.post("/:roomId/quizzes", roomWriteLimiter, ...memberOnly, requireQuizCreator, requireFeature("roomQuizzes"), createQuiz);
 router.get("/:roomId/quizzes/:quizId", ...memberOnly, getQuiz);
 router.put("/:roomId/quizzes/:quizId", ...manager, updateQuiz);
-router.delete("/:roomId/quizzes/:quizId", loadRoom, requireRoomMember, requireRoomOwner, deleteQuiz);
+router.delete("/:roomId/quizzes/:quizId", loadRoom, requireRoomMember, requireQuizDeleter, deleteQuiz);
 
 // questions & lifecycle (managers)
 router.get("/:roomId/quizzes/:quizId/manage", ...manager, getQuizForManager);

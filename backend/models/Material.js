@@ -32,6 +32,14 @@ const materialSchema = new mongoose.Schema(
     //              their dashboard, and it never needs approval.
     visibility: { type: String, enum: ["class", "private"], default: "class" },
 
+    // What kind of file this is. "past_question" = an old exam / test paper,
+    // listed on the Past Questions page. Old documents have no value here and
+    // are treated as "material".
+    kind: { type: String, enum: ["material", "past_question"], default: "material" },
+    // Past questions only: the year it was set and what sort of paper it is.
+    examYear: { type: Number, min: 1950, max: 2100 },
+    examType: { type: String, enum: ["exam", "test", "quiz", "assignment", "other"], default: undefined },
+
     // Personal organisation (independent learners and private uploads): a single
     // folder name plus free tags, so a library can be browsed and filtered.
     folder: { type: String, trim: true, maxlength: 60, default: "" },
@@ -60,6 +68,8 @@ materialSchema.index({ courseId: 1, status: 1, createdAt: -1 });
 materialSchema.index({ uploadedBy: 1, createdAt: -1 });
 materialSchema.index({ status: 1, createdAt: -1 });
 materialSchema.index({ topics: 1 });
+materialSchema.index({ kind: 1, courseId: 1, examYear: -1, createdAt: -1 });
+materialSchema.index({ kind: 1, schoolId: 1, status: 1, visibility: 1, createdAt: -1 });
 materialSchema.index({ uploadedBy: 1, visibility: 1, folder: 1, createdAt: -1 });
 
 export default mongoose.model("Material", materialSchema);

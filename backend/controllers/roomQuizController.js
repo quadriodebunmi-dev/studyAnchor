@@ -6,7 +6,7 @@ import RoomMember from "../models/RoomMember.js";
 import Material from "../models/Material.js";
 import Course from "../models/Course.js";
 import { PLATFORM } from "../config/platform.js";
-import { can } from "../utils/roomPermissions.js";
+import { canManageQuiz, canTakeQuiz } from "../utils/roomPermissions.js";
 import { canViewMaterial, canAccessSchool } from "../utils/materialAccess.js";
 import {
   computeQuizState, validateQuestionInput, dedupeByPrompt, effectiveReleaseAt, isResultsReleased, rankEntries,
@@ -55,10 +55,11 @@ const managerQuestionView = (q) => ({
 
 async function loadQuiz(req, res) {
   if (!mongoose.isValidObjectId(req.params.quizId)) { res.status(404).json({ message: "Quiz not found." }); return null; }
-  const quiz = await RoomQuiz.findOne({ _id: req.params.quizId, room: req.room._id });
+  // The manager middleware may already have loaded it.
+  const quiz = req.quizDoc || await RoomQuiz.findOne({ _id: req.params.quizId, room: req.room._id });
   if (!quiz) { res.status(404).json({ message: "Quiz not found." }); return null; }
-  // Members never see drafts.
-  if (quiz.status === "draft" && !can.manageQuizzes(req.membership)) { res.status(404).json({ message: "Quiz not found." }); return null; }
+  // Drafts are visible only to the quiz's creator and room moderators.
+  if (quiz.status === "draft" && !canManageQuiz(req.membership, quiz, req.user._id)) { res.status(404).json({ message: "Quiz not found." }); return null; }
   return quiz;
 }
 export { loadQuiz };
@@ -171,7 +172,7 @@ export async function updateQuiz(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// DELETE /api/rooms/:roomId/quizzes/:quizId  (owner)
+// DELETE /api/rooms/:roomId/quizzes/:quizId  (room owner or the quiz's creator)
 export async function deleteQuiz(req, res, next) {
   try {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
@@ -270,8 +271,8 @@ export async function deleteQuestion(req, res, next) {
 
 // POST /api/rooms/:roomId/quizzes/:quizId/questions/generate
 //   body: { count, format, difficulty, topic, materialIds? }
-// Generated questions are saved as "needs_review": the quiz can't be published until
-// the creator has looked at each one.
+// Generated questions are saved as approved, so the creator can publish straight away
+// (they can still edit or delete any question while the quiz is a draft).
 export async function generateQuizQuestions(req, res, next) {
   try {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
@@ -309,7 +310,7 @@ export async function generateQuizQuestions(req, res, next) {
     const existing = (await RoomQuizQuestion.find({ quiz: quiz._id }).select("prompt")).map((q) => q.prompt);
     const fresh = dedupeByPrompt(generated, existing);
     const docs = fresh.map((g, i) => ({
-      quiz: quiz._id, room: req.room._id, order: quiz.questionCount + i, source: "ai", reviewStatus: "needs_review",
+      quiz: quiz._id, room: req.room._id, order: quiz.questionCount + i, source: "ai", reviewStatus: "approved",
       type: g.type, prompt: g.prompt, marks: g.marks, options: g.options, correctIndex: g.correctIndex,
       explanation: g.explanation, expectedAnswer: g.expectedAnswer, rubric: g.rubric,
     }));
@@ -419,14 +420,15 @@ export async function releaseResults(req, res, next) {
 export async function listQuizzes(req, res, next) {
   try {
     maybeProcessSchedule();
-    const manager = can.manageQuizzes(req.membership);
+    const moderator = canManageQuiz(req.membership, null, req.user._id);
     const filter = { room: req.room._id };
-    if (!manager) filter.status = "published";
+    // Everyone sees published quizzes; drafts only their creator (and moderators) see.
+    if (!moderator) filter.$or = [{ status: "published" }, { creator: req.user._id }];
     const quizzes = await RoomQuiz.find(filter).sort({ createdAt: -1 }).limit(100).populate("creator", "name");
     const mine = await RoomQuizAttempt.find({ user: req.user._id, quiz: { $in: quizzes.map((q) => q._id) } }).sort({ attemptNo: -1 });
     const byQuiz = new Map();
     for (const a of mine) if (!byQuiz.has(idStr(a.quiz))) byQuiz.set(idStr(a.quiz), a);
-    res.json({ quizzes: quizzes.map((q) => quizView(q, { manager, myAttempt: byQuiz.get(idStr(q._id)) || null })) });
+    res.json({ quizzes: quizzes.map((q) => quizView(q, { manager: canManageQuiz(req.membership, q, req.user._id), myAttempt: byQuiz.get(idStr(q._id)) || null })) });
   } catch (err) { next(err); }
 }
 
@@ -435,9 +437,11 @@ export async function getQuiz(req, res, next) {
   try {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
     await quiz.populate("creator", "name");
-    const manager = can.manageQuizzes(req.membership);
+    const manager = canManageQuiz(req.membership, quiz, req.user._id);
     const mine = await RoomQuizAttempt.findOne({ quiz: quiz._id, user: req.user._id }).sort({ attemptNo: -1 });
-    res.json({ quiz: quizView(quiz, { manager, myAttempt: mine || null }), canAttempt: !manager });
+    // `canAttempt`: the quiz's creator may take their own quiz; other managers (who see its key) may not.
+    // `canManage`: show the "Manage quiz" button.
+    res.json({ quiz: quizView(quiz, { manager, myAttempt: mine || null }), canAttempt: canTakeQuiz(req.membership, quiz, req.user._id), canManage: manager });
   } catch (err) { next(err); }
 }
 
@@ -452,7 +456,8 @@ export async function participation(req, res, next) {
   try {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
     const [members, attempts] = await Promise.all([
-      RoomMember.find({ room: req.room._id, status: "active", role: "member" }).populate("user", "name"),
+      // Plain members, plus the quiz's creator (who may have taken it even if they moderate the room).
+      RoomMember.find({ room: req.room._id, status: "active", $or: [{ role: "member" }, { user: quiz.creator }] }).populate("user", "name"),
       RoomQuizAttempt.find({ quiz: quiz._id }).sort({ attemptNo: -1 }),
     ]);
     const latest = new Map();
@@ -489,7 +494,7 @@ export async function participation(req, res, next) {
 export async function leaderboard(req, res, next) {
   try {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
-    const manager = can.manageQuizzes(req.membership);
+    const manager = canManageQuiz(req.membership, quiz, req.user._id);
     const mine = await RoomQuizAttempt.findOne({ quiz: quiz._id, user: req.user._id, status: "submitted" });
     // Managers can always look; members only once their own results are visible.
     if (!manager && !isResultsReleased(quiz, mine)) {
@@ -502,7 +507,7 @@ export async function leaderboard(req, res, next) {
     })), { tieBreak: quiz.tieBreak });
     res.json({
       available: true, tieBreak: quiz.tieBreak,
-      entries: ranked.map((e) => ({ rank: e.rank, name: e.name, score: e.score, maxScore: e.maxScore, percentage: e.percentage, durationSeconds: quiz.tieBreak === "time" ? e.durationSeconds : undefined, provisional: e.provisional, me: e.userId === idStr(req.user._id) })),
+      entries: ranked.map((e) => ({ rank: e.rank, name: e.name, creator: e.userId === idStr(quiz.creator), score: e.score, maxScore: e.maxScore, percentage: e.percentage, durationSeconds: quiz.tieBreak === "time" ? e.durationSeconds : undefined, provisional: e.provisional, me: e.userId === idStr(req.user._id) })),
     });
   } catch (err) { next(err); }
 }
@@ -524,6 +529,10 @@ export async function getAttemptForGrading(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// A creator who takes their own quiz can't mark or confirm their own written answers.
+const SELF_GRADE_MSG = "You can't mark your own attempt. Ask another room moderator to mark it.";
+const isOwnAttempt = (attempt, req) => idStr(attempt.user) === idStr(req.user._id);
+
 async function afterGradeChange(attempt, quiz, questions) {
   applySummary(attempt, questions);
   await attempt.save();
@@ -541,6 +550,7 @@ export async function gradeAttempt(req, res, next) {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
     const attempt = await RoomQuizAttempt.findOne({ _id: req.params.attemptId, quiz: quiz._id, status: "submitted" });
     if (!attempt) return res.status(404).json({ message: "Submitted attempt not found." });
+    if (isOwnAttempt(attempt, req)) return res.status(403).json({ message: SELF_GRADE_MSG });
     const questions = await RoomQuizQuestion.find({ quiz: quiz._id });
     const byId = new Map(questions.map((q) => [idStr(q._id), q]));
 
@@ -580,6 +590,7 @@ export async function confirmAiGrades(req, res, next) {
     const quiz = await loadQuiz(req, res); if (!quiz) return;
     const attempt = await RoomQuizAttempt.findOne({ _id: req.params.attemptId, quiz: quiz._id, status: "submitted" });
     if (!attempt) return res.status(404).json({ message: "Submitted attempt not found." });
+    if (isOwnAttempt(attempt, req)) return res.status(403).json({ message: SELF_GRADE_MSG });
     const questions = await RoomQuizQuestion.find({ quiz: quiz._id });
     let changed = 0;
     for (const g of attempt.grades) if (g.status === "provisional" && g.marks !== null) { g.status = "final"; g.gradedBy = req.user._id; changed += 1; }

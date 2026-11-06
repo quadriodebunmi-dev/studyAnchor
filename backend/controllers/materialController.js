@@ -1,15 +1,17 @@
 import archiver from "archiver";
+import mongoose from "mongoose";
 import Material from "../models/Material.js";
 import Course from "../models/Course.js";
 import ActivityLog from "../models/ActivityLog.js";
 import Report from "../models/Report.js";
 import { extractText, inferFileType } from "../utils/fileParser.js";
-import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
+import { uploadBufferToCloudinary, signMaterialUpload, materialDeliveryUrl, materialIdPrefix, deleteMaterialAsset } from "../utils/cloudinaryUpload.js";
 import { canViewMaterial, viewableFilter, PUBLIC_MATERIAL_FILTER, publicFilterFor, canAccessSchool } from "../utils/materialAccess.js";
 import { isIndependent } from "../utils/learner.js";
 import { notifyNewMaterial } from "../utils/materialNotify.js";
 import { notifyUser } from "../utils/notify.js";
-import { validateUploadedFile, SCHOOL_EXTENSIONS, PERSONAL_EXTENSIONS } from "../utils/uploadValidation.js";
+import { validateUploadedFile, extensionOf, SCHOOL_EXTENSIONS, PERSONAL_EXTENSIONS } from "../utils/uploadValidation.js";
+import { PLATFORM } from "../config/platform.js";
 import { escapeRegex } from "../utils/regex.js";
 import { paginate, paginateArray } from "../utils/pagination.js";
 import { extractTopics } from "../utils/feedRanking.js";
@@ -29,6 +31,29 @@ const cleanTags = (v) => {
   return [...new Set(arr.map((t) => String(t).trim().toLowerCase().slice(0, 30)).filter(Boolean))].slice(0, 10);
 };
 
+// Past questions: an old exam / test paper. `kind` + year + paper type are validated
+// together so a bad value can never be stored.
+const EXAM_TYPES = ["exam", "test", "quiz", "assignment", "other"];
+function readKind(body) {
+  const kind = body.kind === "past_question" ? "past_question" : "material";
+  if (body.kind !== undefined && body.kind !== "" && !["material", "past_question"].includes(body.kind)) {
+    return { error: "kind must be \"material\" or \"past_question\"." };
+  }
+  if (kind !== "past_question") return { kind, examYear: undefined, examType: undefined };
+  let examYear;
+  if (body.examYear !== undefined && body.examYear !== "") {
+    examYear = Number(body.examYear);
+    const max = new Date().getFullYear() + 1;
+    if (!Number.isInteger(examYear) || examYear < 1950 || examYear > max) return { error: `Exam year must be between 1950 and ${max}.` };
+  }
+  let examType;
+  if (body.examType !== undefined && body.examType !== "") {
+    if (!EXAM_TYPES.includes(body.examType)) return { error: "Choose a valid paper type." };
+    examType = body.examType;
+  }
+  return { kind, examYear, examType };
+}
+
 // An upload's title is always its file name (without the extension), so
 // "Chapter 3 - Cell Biology.pdf" is listed as "Chapter 3 - Cell Biology".
 // It can still be renamed afterwards through PUT /api/materials/:id.
@@ -38,109 +63,256 @@ const titleFromFileName = (fileName) => {
   return (withoutExt || name || "Untitled").slice(0, 200);
 };
 
+// ---- Uploads -----------------------------------------------------------------
+// Two ways in, one code path after the files are known:
+//   POST /materials/upload-signature + /materials/register  (what the app uses): the
+//     browser uploads each file straight to Cloudinary, so size is not limited by the
+//     host's ~4.5 MB request-body cap. The API only signs, then registers the result.
+//   POST /materials  (multipart; kept for old clients): the file passes through the API,
+//     so it only works for small files on serverless hosts.
+
+const maxFileBytes = () => PLATFORM.materials.maxFileBytes;
+const mb = (bytes) => Math.round((bytes / (1024 * 1024)) * 10) / 10;
+
+// Runs `fn` over `items` with at most `size` in flight (files are held in memory while parsed).
+async function settledPool(items, size, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        try { out[i] = { status: "fulfilled", value: await fn(items[i], i) }; }
+        catch (reason) { out[i] = { status: "rejected", reason }; }
+      }
+    })
+  );
+  return out;
+}
+
+// Everything about the request (who, which course, visibility…) — shared by both routes.
+// Sends the error response itself and returns null when the request isn't allowed.
+async function resolveUploadContext(req, res) {
+  const { courseId, description, visibility: requested } = req.body;
+  const kindInfo = readKind(req.body);
+  if (kindInfo.error) { res.status(400).json({ message: kindInfo.error }); return null; }
+  if (requested !== undefined && !["class", "private"].includes(requested)) {
+    res.status(400).json({ message: "visibility must be \"class\" or \"private\"." }); return null;
+  }
+
+  // Personal material: no course. Independent learners can ONLY upload this way;
+  // school students may also keep course-less private notes. Always private.
+  const independent = isIndependent(req.user);
+  const personal = independent || !courseId;
+  if (independent && courseId) {
+    res.status(403).json({ message: "Independent learners keep a private library — join a school to upload to its courses." }); return null;
+  }
+  if (personal && req.user.role !== "student") {
+    res.status(400).json({ message: "courseId is required." }); return null;
+  }
+  if (personal && requested === "class") {
+    res.status(400).json({ message: "Personal materials stay private. Choose a course to share with a class." }); return null;
+  }
+
+  let course = null;
+  if (!personal) {
+    course = await Course.findById(courseId);
+    if (!course) { res.status(404).json({ message: "Course not found." }); return null; }
+    if (!sameSchool(course.schoolId, req.user.schoolId)) {
+      res.status(403).json({ message: "You can only upload to courses at your own school." }); return null;
+    }
+  }
+
+  const isStudent = req.user.role === "student";
+  const isPrivate = personal || (isStudent && requested === "private");
+  return {
+    course, kindInfo, description,
+    allowed: independent ? PERSONAL_EXTENSIONS : SCHOOL_EXTENSIONS,
+    isPrivate,
+    visibility: isPrivate ? "private" : "class",
+    status: isStudent && !isPrivate ? "pending" : "approved",
+    folder: cleanFolder(req.body.folder),
+    tags: cleanTags(req.body.tags),
+  };
+}
+
+// Creates one Material per item and sends the response. Each item is
+// { fileName, load: async () => ({ fileUrl, extractedText, sizeBytes }) }.
+async function createMaterials(req, res, ctx, items) {
+  const { course, kindInfo, description, visibility, status, isPrivate, folder, tags } = ctx;
+  const results = await settledPool(items, 3, async (item) => {
+    const { fileUrl, extractedText, sizeBytes } = await item.load();
+    const title = titleFromFileName(item.fileName);
+    return Material.create({
+      courseId: course?._id,
+      uploadedBy: req.user._id,
+      schoolId: req.user.schoolId || course?.schoolId,
+      folder,
+      tags,
+      title,
+      description,
+      fileUrl,
+      fileName: item.fileName,
+      fileType: inferFileType(item.fileName),
+      size: sizeBytes ? `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB` : undefined,
+      extractedText,
+      // Keywords for the feed's interest matching.
+      topics: extractTopics({
+        title,
+        description,
+        courseText: course ? `${course.code} ${course.title}` : "",
+        body: extractedText,
+      }),
+      status,
+      visibility,
+      kind: kindInfo.kind,
+      examYear: kindInfo.examYear,
+      examType: kindInfo.examType,
+    });
+  });
+
+  const materials = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+  const failed = results.length - materials.length;
+  if (materials.length === 0) {
+    // A refused file (wrong type, over the cap…) tells the person why; anything else is a storage failure.
+    const refused = results.find((r) => r.reason?.userMessage);
+    if (refused) return res.status(400).json({ message: refused.reason.userMessage });
+    return res.status(502).json({ message: "None of the files could be uploaded. Please try again." });
+  }
+
+  // Private titles stay out of the admin-visible activity feed.
+  const noun = kindInfo.kind === "past_question" ? "past question(s)" : "file(s)";
+  const action = isPrivate
+    ? `${req.user.name} saved ${materials.length} ${noun} privately`
+    : `${req.user.name} ${status === "pending" ? "submitted (pending approval)" : "uploaded"} ${materials.length} ${noun}${course ? ` to ${course.code}` : ""}`;
+  await ActivityLog.create({ action, actor: req.user._id });
+  // Rep/admin uploads are approved on the spot — tell the students of that course.
+  if (status === "approved" && visibility === "class") materials.forEach((m) => notifyNewMaterial(m));
+  res.status(201).json({ materials, failed, status, visibility });
+}
+
+const refused = (message) => Object.assign(new Error(message), { userMessage: message });
+
+// POST /api/materials/upload-signature  { files: [{ fileName, size }] }
+// Step 1 of a direct upload: checks each file's type and size, then returns one signed
+// Cloudinary upload per file. Nothing is stored until /register is called.
+export async function getUploadSignatures(req, res, next) {
+  try {
+    const files = Array.isArray(req.body.files) ? req.body.files : [];
+    if (files.length === 0) return res.status(400).json({ message: "Choose at least one file to upload." });
+    if (files.length > PLATFORM.materials.maxFiles) {
+      return res.status(400).json({ message: `You can upload up to ${PLATFORM.materials.maxFiles} files at once.` });
+    }
+    const allowed = isIndependent(req.user) ? PERSONAL_EXTENSIONS : SCHOOL_EXTENSIONS;
+    const signatures = [];
+    for (const f of files) {
+      const name = String(f?.fileName || "").trim();
+      const ext = extensionOf(name);
+      if (!ext || !allowed.includes(ext)) {
+        return res.status(400).json({ message: `"${name || "file"}" isn't a supported type. Allowed: ${allowed.join(", ")}.` });
+      }
+      const bytes = Number(f.size);
+      if (!Number.isFinite(bytes) || bytes <= 0) return res.status(400).json({ message: `"${name}" looks empty.` });
+      if (bytes > maxFileBytes()) {
+        return res.status(400).json({ message: `"${name}" is too large (max ${mb(maxFileBytes())} MB per file).` });
+      }
+      signatures.push(signMaterialUpload(name, inferFileType(name), req.user._id));
+    }
+    res.json({ signatures });
+  } catch (err) { next(err); }
+}
+
+// POST /api/materials/register  (JSON)
+//   { courseId, description, visibility, folder, tags, kind, examYear, examType,
+//     files: [{ publicId, version, fileName }] }
+// Step 2: the files are already on Cloudinary. We confirm each one is really ours, read it
+// back, check its real bytes (the same check the multipart route runs), extract its text and
+// create the Materials. A file that fails the byte check is deleted from Cloudinary.
+export async function registerMaterials(req, res, next) {
+  try {
+    const files = Array.isArray(req.body.files) ? req.body.files : [];
+    if (files.length === 0) return res.status(400).json({ message: "Choose at least one file to upload." });
+    if (files.length > PLATFORM.materials.maxFiles) {
+      return res.status(400).json({ message: `You can upload up to ${PLATFORM.materials.maxFiles} files at once.` });
+    }
+
+    const ctx = await resolveUploadContext(req, res);
+    if (!ctx) return;
+
+    const prefix = materialIdPrefix(req.user._id);
+    const items = [];
+    for (const f of files) {
+      const fileName = String(f?.fileName || "").trim();
+      const publicId = String(f?.publicId || "");
+      const version = String(f?.version || "");
+      if (!fileName || !publicId.startsWith(prefix) || !/^\d{1,15}$/.test(version)) {
+        return res.status(400).json({ message: "One of the uploaded files couldn't be verified. Please upload it again." });
+      }
+      if (!ctx.allowed.includes(extensionOf(fileName))) {
+        return res.status(400).json({ message: `"${fileName}" isn't a supported type. Allowed: ${ctx.allowed.join(", ")}.` });
+      }
+      const fileType = inferFileType(fileName);
+      items.push({
+        fileName,
+        load: async () => {
+          const fileUrl = materialDeliveryUrl({ publicId, version, fileName, fileType });
+          if (await Material.exists({ fileUrl })) throw refused(`"${fileName}" was already added.`);
+
+          const fileRes = await fetch(fileUrl);
+          if (!fileRes.ok) throw new Error(`Cloudinary returned ${fileRes.status} for ${publicId}`);
+          const declared = Number(fileRes.headers.get("content-length"));
+          if (declared > maxFileBytes()) {
+            await deleteMaterialAsset(publicId, fileType);
+            throw refused(`"${fileName}" is too large (max ${mb(maxFileBytes())} MB per file).`);
+          }
+          const buffer = Buffer.from(await fileRes.arrayBuffer());
+          if (buffer.length > maxFileBytes()) {
+            await deleteMaterialAsset(publicId, fileType);
+            throw refused(`"${fileName}" is too large (max ${mb(maxFileBytes())} MB per file).`);
+          }
+          const check = validateUploadedFile({ originalname: fileName, buffer }, ctx.allowed);
+          if (!check.ok) {
+            await deleteMaterialAsset(publicId, fileType);
+            throw refused(check.message);
+          }
+          const extractedText = buffer.length <= PLATFORM.materials.extractMaxBytes ? await extractText(buffer, fileType) : "";
+          return { fileUrl, extractedText, sizeBytes: buffer.length };
+        },
+      });
+    }
+    await createMaterials(req, res, ctx, items);
+  } catch (err) { next(err); }
+}
+
 // POST /api/materials  (student or Course Rep, multipart/form-data with "files")
-// Stage 2.1 — multiple files per request, one Material per file.
-// Students choose `visibility`:
-//   "private" -> just for themselves: no review, only they (and admins) can
-//                see it, and it appears on their own dashboard.
-//   "class"   -> shared with the class: lands "pending" until a Course Rep
-//                approves it (Stage 2.2).
-// Course Reps always upload straight to the class (auto-approved).
+// Legacy route — the app now uses /upload-signature + /register. Still works for small
+// files, but a host with a request-body cap (Vercel: ~4.5 MB) rejects big ones before this runs.
 export async function uploadMaterial(req, res, next) {
   try {
-    const { courseId, description, visibility: requested } = req.body;
     if (!req.files?.length) {
       return res.status(400).json({ message: "Choose at least one file to upload." });
     }
-    if (requested !== undefined && !["class", "private"].includes(requested)) {
-      return res.status(400).json({ message: "visibility must be \"class\" or \"private\"." });
-    }
-
-    // Personal material: no course. Independent learners can ONLY upload this way;
-    // school students may also keep course-less private notes. Always private.
-    const independent = isIndependent(req.user);
-    const personal = independent || !courseId;
-    if (independent && courseId) {
-      return res.status(403).json({ message: "Independent learners keep a private library — join a school to upload to its courses." });
-    }
-    if (personal && req.user.role !== "student") {
-      return res.status(400).json({ message: "courseId is required." });
-    }
-    if (personal && requested === "class") {
-      return res.status(400).json({ message: "Personal materials stay private. Choose a course to share with a class." });
-    }
+    const ctx = await resolveUploadContext(req, res);
+    if (!ctx) return;
 
     // Check every file's extension AND real bytes before anything is stored.
-    const allowed = independent ? PERSONAL_EXTENSIONS : SCHOOL_EXTENSIONS;
     for (const file of req.files) {
-      const check = validateUploadedFile(file, allowed);
+      const check = validateUploadedFile(file, ctx.allowed);
       if (!check.ok) return res.status(400).json({ message: check.message });
     }
 
-    let course = null;
-    if (!personal) {
-      course = await Course.findById(courseId);
-      if (!course) return res.status(404).json({ message: "Course not found." });
-      if (!sameSchool(course.schoolId, req.user.schoolId)) {
-        return res.status(403).json({ message: "You can only upload to courses at your own school." });
-      }
-    }
-
-    const isStudent = req.user.role === "student";
-    const isPrivate = personal || (isStudent && requested === "private");
-    const visibility = isPrivate ? "private" : "class";
-    const status = isStudent && !isPrivate ? "pending" : "approved";
-    const folder = cleanFolder(req.body.folder);
-    const tags = cleanTags(req.body.tags);
-
-    const results = await Promise.allSettled(
-      req.files.map(async (file) => {
+    const items = req.files.map((file) => ({
+      fileName: file.originalname,
+      load: async () => {
         const fileType = inferFileType(file.originalname, file.mimetype);
         const [extractedText, cloudinaryResult] = await Promise.all([
           extractText(file.buffer, fileType),
           uploadBufferToCloudinary(file.buffer, file.originalname, fileType),
         ]);
-        const title = titleFromFileName(file.originalname);
-        return Material.create({
-          courseId: course?._id,
-          uploadedBy: req.user._id,
-          schoolId: req.user.schoolId || course?.schoolId,
-          folder,
-          tags,
-          title,
-          description,
-          fileUrl: cloudinaryResult.secure_url,
-          fileName: file.originalname,
-          fileType,
-          size: file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : undefined,
-          extractedText,
-          // Keywords for the feed's interest matching.
-          topics: extractTopics({
-            title,
-            description,
-            courseText: course ? `${course.code} ${course.title}` : "",
-            body: extractedText,
-          }),
-          status,
-          visibility,
-        });
-      })
-    );
-
-    const materials = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
-    const failed = results.length - materials.length;
-    if (materials.length === 0) {
-      return res.status(502).json({ message: "None of the files could be uploaded. Please try again." });
-    }
-
-    // Private titles stay out of the admin-visible activity feed.
-    const action = isPrivate
-      ? `${req.user.name} saved ${materials.length} file(s) privately`
-      : `${req.user.name} ${status === "pending" ? "submitted (pending approval)" : "uploaded"} ${materials.length} file(s)${course ? ` to ${course.code}` : ""}`;
-    await ActivityLog.create({ action, actor: req.user._id });
-    // Rep/admin uploads are approved on the spot — tell the students of that course.
-    if (status === "approved" && visibility === "class") materials.forEach((m) => notifyNewMaterial(m));
-    res.status(201).json({ materials, failed, status, visibility });
+        return { fileUrl: cloudinaryResult.secure_url, extractedText, sizeBytes: file.size };
+      },
+    }));
+    await createMaterials(req, res, ctx, items);
   } catch (err) { next(err); }
 }
 
@@ -169,6 +341,18 @@ export async function updateMaterial(req, res, next) {
     if (description !== undefined) material.description = description;
     if (req.body.folder !== undefined) material.folder = cleanFolder(req.body.folder);
     if (req.body.tags !== undefined) material.tags = cleanTags(req.body.tags);
+    if (req.body.kind !== undefined) {
+      const k = readKind(req.body);
+      if (k.error) return res.status(400).json({ message: k.error });
+      material.kind = k.kind;
+      material.examYear = k.examYear;
+      material.examType = k.examType;
+    } else if (material.kind === "past_question" && (req.body.examYear !== undefined || req.body.examType !== undefined)) {
+      const k = readKind({ kind: "past_question", examYear: req.body.examYear ?? material.examYear, examType: req.body.examType ?? material.examType });
+      if (k.error) return res.status(400).json({ message: k.error });
+      material.examYear = k.examYear;
+      material.examType = k.examType;
+    }
     if (title || description !== undefined) {
       const course = await Course.findById(material.courseId).select("code title");
       material.topics = extractTopics({
@@ -305,6 +489,8 @@ export async function myUploads(req, res, next) {
     if (req.query.folder !== undefined && req.query.folder !== "") {
       filter.folder = req.query.folder === "__none__" ? "" : cleanFolder(req.query.folder);
     }
+    if (req.query.kind === "past_question") filter.kind = "past_question";
+    else if (req.query.kind === "material") filter.kind = { $ne: "past_question" };
     const q = String(req.query.q || "").trim().slice(0, 80);
     if (q) {
       const rx = new RegExp(escapeRegex(q), "i");
@@ -374,6 +560,62 @@ export async function pickableMaterials(req, res, next) {
     const mine = String(user._id);
     const materials = items.map((m) => ({ ...m, source: String(m.uploadedBy) === mine ? "library" : "school" }));
     res.json({ materials, pagination, scope });
+  } catch (err) { next(err); }
+}
+
+// GET /api/materials/past-questions?source=all|class|personal&courseId=&year=&q=&page=&limit=
+// Old exam / test papers. `source` picks where they come from:
+//   all       (default) your own uploads AND every approved one your school shares
+//   class     only what your school shares (approved, not private)
+//   personal  only your own uploads (private ones and your own submissions)
+// Course reps see the same school-shared papers as students. Independent learners
+// only ever have their own. `years` lists the years available so the page can offer a filter.
+export async function listPastQuestions(req, res, next) {
+  try {
+    const user = req.user;
+    const source = ["class", "personal"].includes(req.query.source) ? req.query.source : "all";
+    const schoolMember = !isIndependent(user) && user.role !== "admin";
+    const branches = [];
+    if (source !== "class") branches.push({ uploadedBy: user._id });
+    if (source !== "personal" && schoolMember) branches.push(publicFilterFor(user));
+    if (user.role === "admin" && source !== "personal") branches.push({}); // admins moderate everything
+    if (!branches.length) {
+      return res.json({ materials: [], years: [], pagination: { page: 1, limit: 12, total: 0, totalPages: 1, hasNext: false, hasPrev: false, hasMore: false } });
+    }
+
+    const base = { kind: "past_question", $or: branches };
+    const and = [];
+    if (req.query.courseId) {
+      if (!mongoose.isValidObjectId(req.query.courseId)) return res.status(400).json({ message: "That course isn't valid." });
+      and.push({ courseId: req.query.courseId });
+    }
+    const q = String(req.query.q || "").trim().slice(0, 80);
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), "i");
+      const textMatch = [{ title: rx }, { fileName: rx }, { tags: rx }];
+      if (schoolMember) {
+        const codes = await Course.find({ code: rx, ...(user.schoolId ? { schoolId: user.schoolId } : {}) }).select("_id").limit(50).lean();
+        if (codes.length) textMatch.push({ courseId: { $in: codes.map((c) => c._id) } });
+      }
+      and.push({ $or: textMatch });
+    }
+    const baseFilter = and.length ? { ...base, $and: and } : base;
+
+    const years = (await Material.distinct("examYear", baseFilter)).filter(Boolean).sort((a, b) => b - a);
+
+    const filter = { ...baseFilter };
+    const year = Number(req.query.year);
+    if (Number.isInteger(year) && year > 0) filter.examYear = year;
+
+    const { items, pagination } = await paginate(Material, filter, req.query, {
+      select: NO_TEXT, populate: [["courseId", COURSE_FIELDS], ["uploadedBy", "name"]],
+      sort: { examYear: -1, createdAt: -1 }, defaultLimit: 12, maxLimit: 30, lean: true,
+    });
+    const mine = String(user._id);
+    res.json({
+      materials: items.map((m) => ({ ...m, source: String(m.uploadedBy?._id || m.uploadedBy) === mine ? "library" : "school" })),
+      years, pagination,
+    });
   } catch (err) { next(err); }
 }
 

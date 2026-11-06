@@ -2,7 +2,8 @@ import express from "express";
 import {
   uploadMaterial, getMaterial, updateMaterial, deleteMaterial,
   downloadMaterial, downloadAllMaterials, toggleBookmark, myBookmarks, myMaterials, myUploads,
-  searchMaterials, reportMaterial, pendingMaterials, approveMaterial, rejectMaterial, myFolders, pickableMaterials,
+  getUploadSignatures, registerMaterials,
+  searchMaterials, reportMaterial, pendingMaterials, approveMaterial, rejectMaterial, myFolders, pickableMaterials, listPastQuestions,
 } from "../controllers/materialController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { repApprovedMiddleware } from "../middleware/repApprovedMiddleware.js";
@@ -31,6 +32,8 @@ router.get("/mine/student", myUploads);
 router.get("/folders", myFolders);
 // Study tools: your library plus your school's shared materials.
 router.get("/pickable", pickableMaterials);
+// Past exam / test papers: your own plus the ones your school shares.
+router.get("/past-questions", listPastQuestions);
 
 // Stage 2.2 — rep-only pending queue + approve/reject actions.
 router.get("/pending", repApprovedMiddleware, pendingMaterials);
@@ -38,6 +41,11 @@ router.post("/:id/approve", repApprovedMiddleware, approveMaterial);
 router.post("/:id/reject", repApprovedMiddleware, rejectMaterial);
 
 router.post("/download-all", zipLimiter, downloadAllMaterials);
+
+// Large files: the browser uploads straight to Cloudinary (serverless hosts reject request
+// bodies over ~4.5 MB), so the API only signs the upload and then registers the result.
+router.post("/upload-signature", studentOrRep, uploadLimiter, getUploadSignatures);
+router.post("/register", studentOrRep, registerMaterials);
 
 // Stage 2.1 — multi-file upload (up to 10 files per request).
 router.post("/", studentOrRep, uploadLimiter, upload.array("files", 10), trimInputs, uploadMaterial); // multipart text fields are only parsed by multer, so trim after it
