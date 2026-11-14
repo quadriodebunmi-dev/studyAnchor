@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, LogOut, X, Moon, Sun, UserCircle2 } from "lucide-react";
+import { Search, LogOut, X, Moon, Sun, UserCircle2, HelpCircle } from "lucide-react";
 import ThemeToggle from "./ThemeToggle.jsx";
 import InstallButton from "./InstallButton.jsx";
 import NotificationBell from "./NotificationBell.jsx";
@@ -12,6 +12,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 import { logout } from "../services/authService.js";
 import { APP_CONFIG } from "../config/appConfig.js";
+import { showOnboardingTour } from "./OnboardingTour.jsx";
 
 // Compact app bar. Below `sm` it is just brand + search + bell + avatar menu
 // (theme, install and log out live in the menu); from `sm` up the full set of
@@ -82,6 +83,11 @@ export default function Navbar({ search, setSearch }) {
 
      
 
+          {user && user.role !== "admin" && (
+            <button onClick={showOnboardingTour} aria-label="Show app overview" title="Show app overview" className="hidden h-9 w-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 sm:grid">
+              <HelpCircle className="h-[18px] w-[18px]" />
+            </button>
+          )}
           {user && user.role !== "admin" && <PlanBadge />}
           {user && user.role !== "admin" && <NotificationBell />}
 
@@ -122,6 +128,11 @@ export default function Navbar({ search, setSearch }) {
                     <Link to="/profile" onClick={() => setMenuOpen(false)} className={menuItem}>
                       <UserCircle2 className="h-4 w-4" /> Profile
                     </Link>
+                  )}
+                  {user.role !== "admin" && (
+                    <button onClick={() => { setMenuOpen(false); showOnboardingTour(); }} className={menuItem}>
+                      <HelpCircle className="h-4 w-4" /> App overview
+                    </button>
                   )}
                   <button onClick={toggleTheme} className={menuItem}>
                     {dark ? <Sun className="h-4 w-4 text-accent" /> : <Moon className="h-4 w-4" />}

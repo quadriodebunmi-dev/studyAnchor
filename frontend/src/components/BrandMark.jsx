@@ -8,7 +8,7 @@ export default function BrandMark({ className = "h-9 w-9" }) {
   return (
     <img
       className={`${className} shrink-0 rounded-lg object-contain`}
-      src="https://study-anchor.com/icons/icon-64.png"
+      src="https://www.study-anchor.com/icons/icon-64.png"
       alt="Study Anchor logo"
     />
   );

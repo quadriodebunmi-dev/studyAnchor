@@ -9,7 +9,7 @@ const LINKS = [
   { label: "Developer", href: "/developers" },
   { label: "Privacy & policy", href: "/privacy" },
   { label: "Add your school", href: "/#request-school" },
-  { label: "Course Reps", to: "/rep-signup" },
+  { label: "Sign up as a Course Rep", to: "/rep-signup" },
 ];
 
 const focusRing =
@@ -48,7 +48,7 @@ export default function PublicNavbar() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
         <Link to="/" onClick={close} className={`flex items-center gap-2 rounded-lg font-display text-lg font-bold ${focusRing}`}>
           <span className="grid h-8 w-8 place-items-center rounded-lg text-night">
-            <img src="https://study-anchor.com/icons/icon-64.png" alt="logo" />
+            <img src="https://www.study-anchor.com/icons/icon-64.png" alt="logo" />
           </span>
           {APP_CONFIG.name}
         </Link>
@@ -94,6 +94,7 @@ export default function PublicNavbar() {
           <div className="mx-auto grid max-w-6xl gap-2 px-4 pb-5 pt-2">
             <InstallButton variant="nav" className="w-full !py-3" />
             <Link to="/signup" onClick={close} className={`rounded-full bg-accent px-4 py-3 text-center font-semibold text-night ${focusRing}`}>Sign up as a student</Link>
+            <Link to="/rep-signup" onClick={close} className={`rounded-full bg-white px-4 py-3 text-center font-semibold text-night ${focusRing}`}>Sign up as a course rep</Link>
             <Link to="/login" onClick={close} className={`rounded-full border border-white/25 px-4 py-3 text-center font-medium ${focusRing}`}>Log in</Link>
           </div>
         </nav>

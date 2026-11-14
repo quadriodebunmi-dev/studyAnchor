@@ -15,6 +15,11 @@ export const APP_CONFIG = {
   supportEmail: "quadriportfolio@gmail.com",
 supportWhatsapp: "2348077128030",
 
+// Paste the Study Anchor WhatsApp group invite link here (WhatsApp > group > Invite via link),
+// or set VITE_WHATSAPP_GROUP_URL. Until one is set, the WhatsApp button opens a chat with
+// support asking to be added to the group.
+whatsappGroupUrl: import.meta.env.VITE_WHATSAPP_GROUP_URL || "",
+
 };
 
 export const DEPARTMENTS = ["Computer Science", "Mathematics", "Accounting", "Mass Communication"];

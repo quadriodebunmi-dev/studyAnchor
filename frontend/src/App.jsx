@@ -6,6 +6,7 @@ import { useAuth } from "./context/AuthContext.jsx";
 import { FullPageLoader } from "./components/Loader.jsx";
 import { StudyTimerProvider } from "./context/StudyTimerContext.jsx";
 import StudyTimerWidget from "./components/StudyTimerWidget.jsx";
+import WhatsAppButton from "./components/WhatsAppButton.jsx";
 
 import LoginPage from "./pages/auth/LoginPage.jsx";
 import SignupPage from "./pages/auth/SignupPage.jsx";
@@ -166,6 +167,8 @@ export default function App() {
       </Routes>
       {/* Goal timer: top-right on every page while a goal is running */}
       <StudyTimerWidget />
+      {/* Floating link to the Study Anchor WhatsApp group, on every page */}
+      <WhatsAppButton />
       </StudyTimerProvider>
     </ToastProvider>
   );
