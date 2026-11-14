@@ -1,7 +1,7 @@
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { userLimiter, roomWriteLimiter } from "../middleware/rateLimitMiddleware.js";
-import { listPlans, myBilling, checkout, verifyPayment, webhook } from "../controllers/billingController.js";
+import { listPlans, myBilling, checkout, verifyPayment, webhook, setAutoRenew } from "../controllers/billingController.js";
 
 const router = express.Router();
 
@@ -14,5 +14,6 @@ router.get("/plans", listPlans);
 router.get("/me", myBilling);
 router.post("/checkout", roomWriteLimiter, checkout);
 router.get("/verify/:reference", verifyPayment);
+router.put("/auto-renew", roomWriteLimiter, setAutoRenew);
 
 export default router;

@@ -21,6 +21,10 @@ const paymentSchema = new mongoose.Schema(
     paidAt: { type: Date },
     verifiedAt: { type: Date },
     entitlement: { type: ObjectId, ref: "Entitlement" },
+    // The customer ticked "renew automatically" at checkout.
+    autoRenew: { type: Boolean, default: false },
+    // This payment was an automatic renewal charge made by the scheduler.
+    renewal: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
