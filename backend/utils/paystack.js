@@ -51,8 +51,13 @@ export function createPaystackClient({ secret, fetchImpl = globalThis.fetch, bas
     return body.data;
   }
   return {
-    initialize: ({ email, amountMinor, currency, reference, callbackUrl, metadata }) =>
-      call("/transaction/initialize", { method: "POST", body: JSON.stringify({ email, amount: amountMinor, currency, reference, callback_url: callbackUrl, metadata }) }),
+    // `channels` (e.g. ["card"]) restricts how the customer can pay. Auto-renew needs a
+    // card, because only a card can be charged again later without the customer present.
+    initialize: ({ email, amountMinor, currency, reference, callbackUrl, metadata, channels }) =>
+      call("/transaction/initialize", { method: "POST", body: JSON.stringify({ email, amount: amountMinor, currency, reference, callback_url: callbackUrl, metadata, ...(channels?.length ? { channels } : {}) }) }),
+    // Charges a card the customer already authorised (a saved `authorization_code`).
+    chargeAuthorization: ({ email, amountMinor, currency, reference, authorizationCode, metadata }) =>
+      call("/transaction/charge_authorization", { method: "POST", body: JSON.stringify({ email, amount: amountMinor, currency, reference, authorization_code: authorizationCode, metadata }) }),
     verify: (reference) => call(`/transaction/verify/${encodeURIComponent(reference)}`),
   };
 }
