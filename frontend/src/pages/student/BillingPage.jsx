@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Check, CreditCard } from "lucide-react";
+import { Check, CreditCard, RefreshCw } from "lucide-react";
 import AppShell from "../AppShell.jsx";
 import Button from "../../components/Button.jsx";
 import Badge from "../../components/Badge.jsx";
 import { InlineLoader } from "../../components/Loader.jsx";
 import { useToast } from "../../components/Toast.jsx";
-import { getMyBilling, getPlans, startCheckout } from "../../services/billingService.js";
+import { getMyBilling, getPlans, startCheckout, setAutoRenew } from "../../services/billingService.js";
 import { clearBillingCache } from "../../hooks/useBilling.js";
 
 const money = (minor, cur) => new Intl.NumberFormat(undefined, { style: "currency", currency: cur }).format(minor / 100);
@@ -16,12 +16,26 @@ export default function BillingPage() {
   const [plans, setPlans] = useState(null);
   const [me, setMe] = useState(null);
   const [busy, setBusy] = useState("");
+  const [renewOnBuy, setRenewOnBuy] = useState(true); // the "renew automatically" tick at checkout
+  const [savingRenew, setSavingRenew] = useState(false);
   useEffect(() => { getPlans().then(setPlans).catch(() => setPlans({ enabled: false, plans: [] })); getMyBilling().then(setMe).catch(() => setMe({ entitlements: [], payments: [] })); }, []);
 
   async function buy(plan) {
     setBusy(plan.key);
-    try { const r = await startCheckout(plan.key); window.location.assign(r.authorizationUrl); }
+    try { const r = await startCheckout(plan.key, renewOnBuy); window.location.assign(r.authorizationUrl); }
     catch (e) { toast(e.message || "Couldn't start the payment.", "error"); setBusy(""); }
+  }
+
+  async function toggleRenew() {
+    const next = !me.autoRenew?.enabled;
+    setSavingRenew(true);
+    try {
+      const autoRenew = await setAutoRenew(next);
+      setMe((m) => ({ ...m, autoRenew }));
+      clearBillingCache();
+      toast(next ? "Auto-renew is on." : "Auto-renew is off. You won't be charged again automatically.", "success");
+    } catch (e) { toast(e.message || "Couldn't change auto-renew.", "error"); }
+    finally { setSavingRenew(false); }
   }
 
   if (!plans || !me) return <AppShell><InlineLoader /></AppShell>;
@@ -33,7 +47,14 @@ export default function BillingPage() {
       ) : (
         <>
           {plans.paidFeatures.length > 0 && <p className="mt-1 text-sm lv-meta">Paid features: {plans.paidFeatures.map((f) => f.label).join(", ")}.</p>}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <AutoRenewCard ar={me.autoRenew} onToggle={toggleRenew} saving={savingRenew} />
+          {plans.plans.length > 0 && (
+            <label className="mt-5 flex max-w-xl cursor-pointer items-start gap-2.5 text-sm">
+              <input type="checkbox" checked={renewOnBuy} onChange={(e) => setRenewOnBuy(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+              <span>Renew automatically when my plan ends <span className="block text-xs lv-meta">Your card is charged again a day before it expires. You can switch this off here at any time.</span></span>
+            </label>
+          )}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {plans.plans.map((p) => {
               const active = me.entitlements.find((e) => e.planKey === p.key);
               return (
@@ -62,6 +83,38 @@ export default function BillingPage() {
         </section>
       )}
     </AppShell>
+  );
+}
+
+// The on/off switch for automatic renewal. The server is the source of truth; this only shows it.
+function AutoRenewCard({ ar, onToggle, saving }) {
+  if (!ar) return null;
+  const on = Boolean(ar.enabled);
+  const canSwitch = on || ar.hasCard;
+  return (
+    <section className="mt-5 max-w-xl rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/15 text-highlight-deep dark:text-accent"><RefreshCw className="h-4 w-4" /></span>
+          <div className="min-w-0">
+            <h2 className="font-display text-base font-semibold">Auto-renew</h2>
+            <p className="mt-0.5 text-sm lv-meta">
+              {on ? "Your plan renews by itself using your saved card." : "Off. Your plan ends on its date unless you pay again."}
+            </p>
+            {ar.card && <p className="mt-1 text-xs lv-meta"><span className="capitalize">{ar.card.brand || "Card"}</span> •••• {ar.card.last4}{ar.card.expMonth ? ` · expires ${ar.card.expMonth}/${String(ar.card.expYear).slice(-2)}` : ""}</p>}
+            {on && ar.renewsAt && <p className="mt-0.5 text-xs lv-meta">Next charge around {new Date(ar.renewsAt).toLocaleDateString()}.</p>}
+            {ar.disabledReason === "too_many_failures" && !on && <p className="mt-1 text-xs text-warning">We turned this off after a few failed charges. Pay for your plan again, then switch it back on.</p>}
+            {!ar.hasCard && <p className="mt-1 text-xs lv-meta">Pay for a plan with a card and tick “Renew automatically” to start.</p>}
+          </div>
+        </div>
+        <button
+          type="button" role="switch" aria-checked={on} aria-label="Auto-renew" disabled={saving || !canSwitch} onClick={onToggle}
+          className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${on ? "bg-success" : "bg-slate-300 dark:bg-slate-700"}`}
+        >
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? "left-[1.375rem]" : "left-0.5"}`} />
+        </button>
+      </div>
+    </section>
   );
 }
 

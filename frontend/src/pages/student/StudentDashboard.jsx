@@ -9,6 +9,7 @@ import { useStudyProgress } from "../../hooks/useStudyProgress.js";
 import { useInfiniteScroll } from "../../hooks/useInfiniteScroll.js";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
+import NoCoursesPanel from "../../components/NoCoursesPanel.jsx";
 import { ListSkeleton } from "../../components/Loader.jsx";
 import Button from "../../components/Button.jsx";
 import MaterialCard from "../../components/MaterialCard.jsx";
@@ -274,11 +275,18 @@ export default function StudentDashboard() {
                   );
                 })}
                 {filteredCourses.length === 0 && (
-                  <EmptyState
-                    icon={<FolderKanban className="h-5 w-5" />}
-                    title={q ? "No courses match" : "No courses yet"}
-                    message={q ? "Try the course code instead." : "Courses for your department, level and session appear here as soon as a rep sets them up."}
-                  />
+                  q ? (
+                    <EmptyState icon={<FolderKanban className="h-5 w-5" />} title="No courses match" message="Try the course code instead." />
+                  ) : isRep ? (
+                    <EmptyState
+                      icon={<FolderKanban className="h-5 w-5" />}
+                      title="No courses yet"
+                      message="Courses for your department, level and session appear here once they've been added."
+                      action={<Button size="sm" onClick={() => navigate("/rep/courses")}>Go to my courses</Button>}
+                    />
+                  ) : (
+                    <NoCoursesPanel onUpload={() => navigate("/my-uploads")} />
+                  )
                 )}
               </div>
             </section>

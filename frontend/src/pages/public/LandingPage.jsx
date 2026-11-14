@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { ShieldCheck, Sparkles, Bot, WifiOff, Lock, UploadCloud, CheckCircle2 } from "lucide-react";
+import {
+  ShieldCheck, Sparkles, Bot, WifiOff, Lock, UploadCloud, CheckCircle2, GraduationCap, Users, ClipboardCheck, ArrowRight,
+  Compass, FileQuestion, Layers, Camera, ListChecks, MessagesSquare, Trophy, Target, CalendarDays, BarChart3, Library, Upload, FolderKanban, ChevronDown,
+} from "lucide-react";
 import PublicLayout from "../../components/PublicLayout.jsx";
 import PublicNavbar from "../../components/PublicNavbar.jsx";
 import Button from "../../components/Button.jsx";
@@ -26,6 +29,45 @@ const FEATURES = [
   { icon: Sparkles, title: "Quizzes from your slides", text: "Turn any material into multiple-choice or theory questions with model answers.", span: "lg:col-span-2" },
   { icon: Bot, title: "An AI study assistant", text: "Ask about a concept or a specific handout and get a clear explanation.", span: "lg:col-span-2" },
   { icon: WifiOff, title: "Works offline", text: "Install it on your phone. Materials you've opened stay readable without data.", span: "lg:col-span-2" },
+];
+
+// Who it is for. The course rep card is the big one: reps are how a class gets onto Study Anchor.
+const AUDIENCES = [
+  { icon: GraduationCap, title: "Students", text: "Study from the materials your own course rep uploads for your department, level and semester.", points: ["Courses and materials for your class", "Past questions, quizzes and flashcards", "AI assistant, study rooms and goals"], to: "/signup", cta: "Sign up as a student" },
+  { icon: Library, title: "Independent learners", text: "Not at a school on the list? Keep a private library and use every AI study tool.", points: ["Upload PDFs, Word, slides and photos of notes", "Snap a question, flashcards, mock exams", "Join a school later from your profile"], to: "/signup", cta: "Start learning" },
+];
+
+// What a course rep does, in order. Step 3 is the part students need to know.
+const REP_STEPS = [
+  { icon: ClipboardCheck, title: "Apply as a course rep", text: "Choose your school, department, level and session. An admin approves your application." },
+  { icon: FolderKanban, title: "Add your courses", text: "Set up the courses for your class for each semester, or let your class rep manage the course list." },
+  { icon: Upload, title: "Upload the materials", text: "Add lecture notes, slides and past questions to each course. Students can read, download and quiz themselves on them." },
+  { icon: Users, title: "Tell your classmates to sign up as students", text: "They pick the same school, department, level, semester and session as you, and everything you upload shows up for them automatically." },
+];
+
+// Everything inside the app, in a little more detail than the headline features.
+const INSIDE = [
+  { icon: Library, title: "Your courses", text: "Courses for your department, level and session, with your reading progress on each." },
+  { icon: Compass, title: "Explore feed", text: "Browse and search materials from other departments." },
+  { icon: FileQuestion, title: "Past questions", text: "Practise with questions from earlier sessions." },
+  { icon: Camera, title: "Snap a Question", text: "Take a photo of a question and get it explained step by step." },
+  { icon: Layers, title: "Flashcards", text: "Generate decks from any material and revise anywhere." },
+  { icon: ListChecks, title: "Mock exams", text: "Timed practice exams built from your courses, with marking." },
+  { icon: MessagesSquare, title: "Study rooms", text: "Discuss with classmates and take room quizzes together." },
+  { icon: Target, title: "Goals & streaks", text: "Set study goals, run the timer and keep your streak alive." },
+  { icon: Trophy, title: "Leaderboard", text: "Earn points for studying and see how you rank." },
+  { icon: CalendarDays, title: "Calendar", text: "Keep exams, deadlines and study sessions in one place." },
+  { icon: BarChart3, title: "Study analytics", text: "See what you've read and where your time goes." },
+  { icon: Bot, title: "AI assistant", text: "Ask about a concept or a specific handout in plain language." },
+];
+
+const FAQ = [
+  { q: "Is Study Anchor free?", a: "You can sign up and start studying for free. Some AI tools may be part of a paid plan, which you can see and manage on the Billing page. Auto-renew is optional and you can switch it off at any time." },
+  { q: "How do I see my course materials?", a: "Sign up as a student and choose your school, department, level, semester and session. Your course rep uploads the materials for your class, and they appear on your dashboard." },
+  { q: "My course rep hasn't set up our courses yet. What do I do?", a: "Upload your own files to your library and study from them straight away. You can also copy the course rep signup link from your dashboard and send it to your rep." },
+  { q: "I'm a course rep. How do my classmates see what I upload?", a: "Ask them to sign up as students and pick the same school, department, level, semester and session as you. Whatever you upload for those courses shows up for them." },
+  { q: "My school isn't on the list.", a: "You can add it in under a minute. It works straight away while an admin verifies it." },
+  { q: "Can I use it without data?", a: "Install it on your phone. Materials you've already opened stay readable offline." },
 ];
 
 function RequestSchool() {
@@ -103,12 +145,16 @@ export default function LandingPage() {
             <p className="sa-rise mt-5 max-w-md text-sm leading-relaxed text-slate-300" style={{ animationDelay: "160ms" }}>
               {APP_CONFIG.name} brings course materials together by department, level and semester. Your own reps upload them, and you study straight from them.
             </p>
-            <div className="sa-rise mt-8 flex flex-col gap-3 sm:flex-row" style={{ animationDelay: "240ms" }}>
-              <Link to="/signup" className="w-full sm:w-auto"><Button variant="accent" size="lg" className="w-full sm:w-auto">Sign up as a student</Button></Link>
-              <Link to="/login" className="w-full sm:w-auto"><Button variant="outline" size="lg" className="w-full border-white/30 text-white hover:bg-white/10 sm:w-auto dark:text-white">Log in</Button></Link>
+            <div className="sa-rise mt-8 grid gap-3 sm:grid-cols-2" style={{ animationDelay: "240ms" }}>
+              <Link to="/signup" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-4 text-base font-bold text-night shadow-glow transition hover:brightness-110">
+                <GraduationCap className="h-5 w-5" />Sign up as a student
+              </Link>
+              <Link to="/rep-signup" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-base font-bold text-night shadow-lift transition hover:bg-slate-100">
+                <Users className="h-5 w-5" />Sign up as a course rep
+              </Link>
             </div>
-            <p className="sa-rise mt-4 text-xs text-slate-400" style={{ animationDelay: "300ms" }}>
-              Course Rep? <Link to="/rep-signup" className="font-medium text-accent hover:underline">Apply here</Link>
+            <p className="sa-rise mt-4 text-sm text-slate-300" style={{ animationDelay: "300ms" }}>
+              Already have an account? <Link to="/login" className="font-semibold text-accent hover:underline">Log in</Link>
             </p>
           </div>
           <img
@@ -117,6 +163,57 @@ export default function LandingPage() {
             className="sa-rise mx-auto w-full max-w-sm lg:max-w-none"
             style={{ animationDelay: "200ms" }}
           />
+        </div>
+      </section>
+
+      {/* COURSE REP: the big call to action */}
+      <section id="course-reps" className="mx-auto max-w-6xl scroll-mt-20 px-4 pt-16">
+        <div className="overflow-hidden rounded-3xl bg-accent p-6 text-night shadow-glow sm:p-10">
+          <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-night/10 px-3 py-1 text-xs font-semibold"><Users className="h-3.5 w-3.5" />For course reps</span>
+              <h2 className="mt-4 font-display text-2xl font-extrabold leading-tight sm:text-4xl">Are you a course rep? Put your whole class on Study Anchor.</h2>
+              <p className="mt-4 max-w-md text-sm leading-relaxed sm:text-base">
+                You upload the courses and materials once. Your classmates sign up as students, pick the same school, department, level, semester and session as you, and see everything you upload.
+              </p>
+              <Link to="/rep-signup" className="mt-7 flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-night px-8 py-5 text-lg font-extrabold text-white shadow-lift transition hover:opacity-90 sm:w-fit">
+                Sign up as a course rep <ArrowRight className="h-5 w-5" />
+              </Link>
+              <p className="mt-3 text-xs">An admin approves every course rep, usually within a short time. You'll be notified.</p>
+            </div>
+            <ol className="grid gap-3">
+              {REP_STEPS.map(({ icon: Icon, title, text }, i) => (
+                <li key={title} className="flex gap-3 rounded-2xl bg-white/70 p-4 dark:bg-night/80 dark:text-white">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-night text-white dark:bg-accent dark:text-night"><Icon className="h-5 w-5" /></span>
+                  <span>
+                    <span className="block font-display text-sm font-bold">{i + 1}. {title}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed opacity-80">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <p className="mt-6 text-xs leading-relaxed">
+            <strong>Two kinds of rep:</strong> a <em>course rep</em> uploads and manages materials; a <em>class rep</em> manages the list of courses for the class. Choose which one you are when you apply.
+          </p>
+        </div>
+      </section>
+
+      {/* WHO IT'S FOR */}
+      <section className="mx-auto max-w-6xl px-4 pt-16">
+        <h2 className="font-display text-lg font-bold sm:text-xl">Made for the way you study</h2>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {AUDIENCES.map(({ icon: Icon, title, text, points, to, cta }) => (
+            <div key={title} className="lv-card flex flex-col p-6">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/20 text-primary"><Icon className="h-5 w-5" /></span>
+              <h3 className="mt-3 font-display text-base font-semibold">{title}</h3>
+              <p className="mt-1 text-xs lv-meta sm:text-sm">{text}</p>
+              <ul className="mt-3 flex-1 space-y-1.5 text-sm">
+                {points.map((pt) => <li key={pt} className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />{pt}</li>)}
+              </ul>
+              <Link to={to} className="mt-5 w-full sm:w-fit"><Button variant="accent" className="w-full sm:w-auto">{cta}</Button></Link>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -169,6 +266,21 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* EVERYTHING INSIDE */}
+      <section id="inside" className="mx-auto max-w-6xl scroll-mt-20 px-4 pb-16">
+        <h2 className="font-display text-lg font-bold sm:text-xl">Everything inside Study Anchor</h2>
+        <p className="mt-2 max-w-xl text-xs lv-meta sm:text-sm">Once you're in, here's what you can use every day.</p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {INSIDE.map(({ icon: Icon, title, text }) => (
+            <div key={title} className="lv-card p-4">
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent/20 text-primary"><Icon className="h-4 w-4" /></span>
+              <h3 className="mt-2.5 font-display text-sm font-semibold">{title}</h3>
+              <p className="mt-1 text-xs lv-meta">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* COMMUNITY */}
       <section className="mx-auto max-w-6xl px-4 pb-16">
         <div className="lv-card grid overflow-hidden md:grid-cols-2">
@@ -199,6 +311,45 @@ export default function LandingPage() {
           <RequestSchool />
         </div>
       </section>
+
+      {/* FAQ */}
+      <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-4 pb-16">
+        <h2 className="font-display text-lg font-bold sm:text-xl">Questions people ask</h2>
+        <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+          {FAQ.map(({ q, a }) => (
+            <details key={q} className="group px-4 py-3">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold">
+                {q}<ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+              <p className="mt-2 text-sm leading-relaxed lv-meta">{a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {/* FINAL CALL TO ACTION */}
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+        <div className="rounded-3xl bg-night p-8 text-center text-white sm:p-12">
+          <h2 className="font-display text-xl font-extrabold sm:text-3xl">Ready to study smarter?</h2>
+          <div className="mx-auto mt-6 grid max-w-xl gap-3 sm:grid-cols-2">
+            <Link to="/signup" className="flex min-h-14 items-center justify-center rounded-2xl bg-accent px-6 py-4 font-bold text-night hover:brightness-110">Sign up as a student</Link>
+            <Link to="/rep-signup" className="flex min-h-14 items-center justify-center rounded-2xl bg-white px-6 py-4 font-bold text-night hover:bg-slate-100">Sign up as a course rep</Link>
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="border-t border-slate-200 dark:border-slate-800">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm lv-meta">
+          <p>© {new Date().getFullYear()} {APP_CONFIG.name}</p>
+          <div className="flex flex-wrap gap-4">
+            <Link to="/rep-signup" className="hover:text-primary">Course reps</Link>
+            <Link to="/developers" className="hover:text-primary">Developers</Link>
+            <Link to="/privacy" className="hover:text-primary">Privacy policy</Link>
+            <Link to="/login" className="hover:text-primary">Log in</Link>
+          </div>
+        </div>
+      </footer>
     </>
   );
 }

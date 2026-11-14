@@ -8,6 +8,7 @@ import EmptyState from "../components/EmptyState.jsx";
 import { CardSkeleton } from "../components/Loader.jsx";
 import PwaPrompts, { OfflineBanner } from "../components/PwaPrompts.jsx";
 import AnnouncementBanner from "../components/AnnouncementBanner.jsx";
+import OnboardingTour from "../components/OnboardingTour.jsx";
 import Pager from "../components/Pager.jsx";
 import { Search } from "lucide-react";
 import { searchMaterials, getPendingMaterials } from "../services/materialService.js";
@@ -110,6 +111,8 @@ export default function AppShell({ sidebarItems: itemsProp, children }) {
 
       {sidebarItems && <MobileTabBar items={sidebarItems} />}
       <PwaPrompts />
+      {/* Animated first-sign-up overview; reopened from the ? button in the navbar */}
+      <OnboardingTour />
     </div>
   );
 }
